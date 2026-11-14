@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NEOHELIX | Sequence Alignment Workbench</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header>
+    <div><div class="eyebrow">BIOINFORMATICS • EDUCATIONAL WORKBENCH</div><h1>NEO<span>HELIX</span></h1><p>Pairwise and multiple sequence alignment</p></div>
+    <div class="status"><i></i> ALIGNMENT ENGINE READY</div>
+  </header>
+  <main>
+    <section class="intro"><div><div class="eyebrow">SEQUENCE ANALYSIS PLATFORM</div><h2>Explore sequence relationships.</h2><p>Align two sequences with NW/SW, or compare several sequences using a simple progressive star MSA.</p></div><div class="helix">⌁</div></section>
+
+    <section class="panel">
+      <div class="section-title"><span class="number">01</span><div><h2>Pairwise alignment</h2><p>Needleman–Wunsch global or Smith–Waterman local alignment</p></div></div>
+      <div class="grid two">
+        <label>Sequence 1<textarea id="pair1" rows="3">GTTACATTT</textarea></label>
+        <label>Sequence 2<textarea id="pair2" rows="3">TGTTACA</textarea></label>
+      </div>
+      <div class="controls">
+        <label>Algorithm<select id="mode"><option value="global">Needleman–Wunsch (global)</option><option value="local">Smith–Waterman (local)</option></select></label>
+        <label>Match<input id="match" type="number" value="1"></label>
+        <label>Mismatch<input id="mismatch" type="number" value="-1"></label>
+        <label>Gap<input id="gap" type="number" value="-2"></label>
+        <button id="pairButton">Run pairwise alignment</button>
+      </div>
+      <div id="pairResult" class="result hidden"></div>
+    </section>
+
+    <section class="panel">
+      <div class="section-title"><span class="number">02</span><div><h2>Multiple sequence alignment</h2><p>Enter 2–8 DNA sequences in FASTA format or one sequence per line.</p></div></div>
+      <label>FASTA / sequences<textarea id="msaInput" rows="8">>Sequence_1
+GGGATCGATCGGG
+>Sequence_2
+ATCGATCG
+>Sequence_3
+GGATCGATCG
+>Sequence_4
+ATCGATC</textarea></label>
+      <div class="controls compact">
+        <label>Match<input id="msaMatch" type="number" value="1"></label>
+        <label>Mismatch<input id="msaMismatch" type="number" value="-1"></label>
+        <label>Gap<input id="msaGap" type="number" value="-2"></label>
+        <button id="msaButton">Run multiple alignment</button>
+      </div>
+      <div id="msaResult" class="result hidden"></div>
+    </section>
+
+    <section class="panel">
+      <div class="section-title"><span class="number">03</span><div><h2>Fetch from NCBI</h2><p>Retrieve one reference nucleotide sequence from NCBI Nucleotide (nuccore). Example: NM_000546.6 (human TP53 mRNA).</p></div></div>
+      <div class="controls ncbi">
+        <label>NCBI nucleotide accession<input id="accession" placeholder="e.g. NM_000546.6"></label>
+        <label>Contact email<input id="email" type="email" placeholder="you@example.com"></label>
+        <button id="ncbiButton">Fetch sequence</button>
+      </div>
+      <div id="ncbiResult" class="result hidden"></div>
+    </section>
+    <footer>NEOHELIX • Educational implementation • DNA/RNA input (U is converted to T) • Maximum 8 sequences • NCBI fetch supports nucleotide-record accessions, not SRR run downloads</footer>
+  </main>
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
