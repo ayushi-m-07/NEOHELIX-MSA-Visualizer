@@ -9,17 +9,67 @@ function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, (char) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
 }
 
+
 function showAlignment(target, title, result) {
   target.classList.remove("hidden");
+
   const a = result.aligned_seq1;
   const b = result.aligned_seq2;
+
   let markers = "";
-  for (let i = 0; i < a.length; i++) markers += a[i] === b[i] ? "|" : " ";
-  let html = `<h3>${escapeHtml(title)}</h3><div class="stats"><div class="stat"><b>${result.score}</b>Alignment score</div><div class="stat"><b>${a.length}</b>Alignment columns</div></div>`;
-  html += `<div class="mono">${escapeHtml(a)}\n<span class="matchline">${escapeHtml(markers)}</span>\n${escapeHtml(b)}</div>`;
-  html += `<h3 style="margin-top:18px">Dynamic-programming score matrix</h3>${matrixTable(result.matrix, result.path)}`;
+  for (let i = 0; i < a.length; i++) {
+    markers += a[i] === b[i] ? "|" : " ";
+  }
+
+  let html = `
+    <h3>${escapeHtml(title)}</h3>
+
+    <div class="stats">
+      <div class="stat">
+        <b>${result.score}</b>
+        Alignment score
+      </div>
+      <div class="stat">
+        <b>${a.length}</b>
+        Alignment columns
+      </div>
+    </div>
+
+    <h3 style="margin-top:18px">Optimal alignment</h3>
+
+    <div class="mono">${escapeHtml(a)}
+<span class="matchline">${escapeHtml(markers)}</span>
+${escapeHtml(b)}</div>
+  `;
+
+  // Display the complete DP matrix only for small sequences.
+  const maxLength = Math.max(a.length, b.length);
+
+  if (result.matrix && maxLength <= 50) {
+    html += `
+      <h3 style="margin-top:18px">
+        Dynamic-programming score matrix
+      </h3>
+      <p>Highlighted cells show the optimal traceback path.</p>
+      ${matrixTable(result.matrix, result.path)}
+    `;
+  } else {
+    html += `
+      <h3 style="margin-top:18px">
+        Dynamic-programming score matrix
+      </h3>
+      <p>
+        The full matrix is hidden for large sequences
+        to keep the interface responsive.
+        The alignment score and optimal alignment are
+        still available above.
+      </p>
+    `;
+  }
+
   target.innerHTML = html;
 }
+
 
 function matrixTable(matrix, path) {
   const pathKeys = new Set(path.map(([i,j]) => `${i},${j}`));

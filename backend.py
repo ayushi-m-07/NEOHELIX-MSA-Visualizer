@@ -218,7 +218,7 @@ def alignment_analysis(aligned_sequences):
             compared = list(zip(aligned_sequences[i], aligned_sequences[j]))
             # A gap opposite a nucleotide is treated as a non-match.
             matches = sum(a == b and a != "-" for a, b in compared)
-            row.append(round(matches / len(compared) * 100, 1) if compared else 0)
+            row.append(round(matches / len(compared) * 100, 2) if compared else 0)
         identities.append(row)
 
     return {"consensus": consensus, "conservation": conservation, "identity": identities}
