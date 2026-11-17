@@ -44,6 +44,26 @@
 .mg-hit{box-shadow:inset 0 0 0 1px currentColor}
 .mg-legend{display:flex;flex-wrap:wrap;gap:14px;margin-top:10px}
 .mg-legend b{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+.mg-heat-legend{
+  display:none;
+  align-items:center;
+  gap:9px;
+  margin-top:12px;
+  font:11px Inter,system-ui,sans-serif;
+  color:var(--muted,#8da6b2);
+}
+.mg-heat-legend.visible{display:flex}
+.mg-heat-gradient{
+  width:150px;
+  height:10px;
+  border-radius:5px;
+  background:linear-gradient(to right,
+    rgba(76,228,237,.1),
+    rgba(76,228,237,.5),
+    rgba(76,228,237,.95)
+  );
+  border:1px solid var(--line,#24404e);
+}
 .mg-tip{position:fixed;z-index:50;display:none;pointer-events:none;background:#04141a;border:1px solid var(--line,#24404e);border-radius:8px;padding:7px 10px;font:12px/1.5 Inter,system-ui,sans-serif;color:#e7f1f5;white-space:nowrap}`;
 
   const BASE = { A: "A", T: "T", U: "T", G: "G", C: "C", N: "N" };
@@ -100,14 +120,25 @@
           <span>${rows.length} sequences &times; ${width} columns &middot; ${fullyConserved} fully conserved</span>
         </div>
         <div class="mg-scroll"><div class="mg-grid"></div></div>
-        <div class="mg-legend">${LEGEND.map(([t, c]) => `<span><b style="background:${c}"></b>${t}</span>`).join("")}<span id="mg-hint"></span></div>
-        <div class="mg-tip"></div>
+       <div class="mg-legend">
+  ${LEGEND.map(([t, c]) => `<span><b style="background:${c}"></b>${t}</span>`).join("")}
+  <span id="mg-hint"></span>
+</div>
+
+<div class="mg-heat-legend">
+  <span>0% — Low</span>
+  <div class="mg-heat-gradient"></div>
+  <span>100% — High</span>
+</div>
+
+<div class="mg-tip"></div>
       </div>`;
 
     const wrap = container.querySelector(".mg-wrap");
     const grid = container.querySelector(".mg-grid");
     const tip = container.querySelector(".mg-tip");
     const hint = container.querySelector("#mg-hint");
+    const heatLegend = container.querySelector(".mg-heat-legend");
     const buttons = container.querySelectorAll(".mg-seg button");
     const HINTS = { bases: "Colour = nucleotide", heat: "Brighter = more conserved column", diff: "Dots match the consensus; coloured bases differ" };
 
@@ -127,9 +158,14 @@
     }
 
     function build() {
-      wrap.style.setProperty("--cell", state.cell + "px");
-      hint.textContent = HINTS[state.mode];
-      buttons.forEach((b) => b.classList.toggle("on", b.dataset.mode === state.mode));
+  wrap.style.setProperty("--cell", state.cell + "px");
+  hint.textContent = HINTS[state.mode];
+
+  heatLegend.classList.toggle("visible", state.mode === "heat");
+
+  buttons.forEach((b) =>
+    b.classList.toggle("on", b.dataset.mode === state.mode)
+  );
       let h = '<div class="mg-row mg-ruler"><div class="mg-name"></div>';
       for (let c = 0; c < width; c++) h += `<div class="mg-col">${c === 0 || (c + 1) % 10 === 0 ? c + 1 : ""}</div>`;
       h += "</div>";
@@ -139,7 +175,23 @@
         h += "</div>";
       });
       h += '<div class="mg-row mg-bars"><div class="mg-name">Conservation</div>';
-      for (let c = 0; c < width; c++) h += `<div class="mg-col" data-c="${c}"><i style="height:${cons[c]}%;background:rgba(76,228,237,${(0.25 + 0.75 * cons[c] / 100).toFixed(2)})"></i></div>`;
+
+for (let c = 0; c < width; c++) {
+  const percentage = cons[c];
+
+  h += `
+    <div
+      class="mg-col"
+      data-c="${c}"
+      title="Column ${c + 1}: ${percentage}% conserved"
+    >
+      <i style="
+        height:${percentage}%;
+        background:rgba(76,228,237,${(0.25 + 0.75 * percentage / 100).toFixed(2)})
+      "></i>
+    </div>
+  `;
+}
       h += '</div><div class="mg-row mg-cons"><div class="mg-name">Consensus</div>';
       for (let c = 0; c < width; c++) {
         const ch = consensus[c];
