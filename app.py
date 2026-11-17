@@ -80,35 +80,16 @@ def http_get(url, accept="application/json"):
             "User-Agent": "NEOHELIX-MSA-Visualizer/1.0 (educational sequence retrieval)"
         },
     )
-    # Public APIs can briefly return 429/5xx responses. Retry a few times
-    # before reporting a temporary service problem to the user.
-    for attempt in range(3):
-        try:
-            with urllib.request.urlopen(req, timeout=25) as response:
-                return response.read().decode("utf-8")
-        except urllib.error.HTTPError as error:
-            detail = error.read().decode("utf-8", errors="replace")[:300]
-            if error.code == 404:
-                raise ValueError("No matching record was found in that database.") from error
-            if error.code in {429, 500, 502, 503, 504} and attempt < 2:
-                import time
-                time.sleep(attempt + 1)
-                continue
-            if error.code in {429, 500, 502, 503, 504}:
-                raise ValueError(
-                    f"The database service is temporarily unavailable (HTTP {error.code}). "
-                    "Please try again in a few minutes."
-                ) from error
-            raise ValueError(f"Database request failed (HTTP {error.code}): {detail}") from error
-        except (urllib.error.URLError, TimeoutError) as error:
-            if attempt < 2:
-                import time
-                time.sleep(attempt + 1)
-                continue
-            raise ValueError(
-                "Could not reach the database service after several attempts. "
-                "Please try again shortly."
-            ) from error
+    try:
+        with urllib.request.urlopen(req, timeout=25) as response:
+            return response.read().decode("utf-8")
+    except urllib.error.HTTPError as error:
+        detail = error.read().decode("utf-8", errors="replace")[:300]
+        if error.code == 404:
+            raise ValueError("No matching record was found in that database.") from error
+        raise ValueError(f"Database request failed (HTTP {error.code}): {detail}") from error
+    except (urllib.error.URLError, TimeoutError) as error:
+        raise ValueError("Could not reach the database service. Please try again shortly.") from error
 
 
 def species_to_ensembl(species):
@@ -227,10 +208,10 @@ def fetch_ensembl(user_input, species, sequence_type):
     encoded_species = urllib.parse.quote(ensembl_species, safe="_")
     encoded_input = urllib.parse.quote(user_input, safe="")
 
-    if re.match(r"^ENST\d+(?:\.\d+)?$", user_input, re.IGNORECASE):
+    if re.match(r"^ENST\\d+(?:\\.\\d+)?$", user_input, re.IGNORECASE):
         transcript_id = user_input
         description = f"Ensembl transcript {transcript_id}"
-    elif re.match(r"^ENSG\d+(?:\.\d+)?$", user_input, re.IGNORECASE):
+    elif re.match(r"^ENSG\\d+(?:\\.\\d+)?$", user_input, re.IGNORECASE):
         lookup_url = (
             f"https://rest.ensembl.org/lookup/id/{encoded_input}"
             "?expand=1;content-type=application/json"
@@ -277,7 +258,7 @@ def fetch_ensembl(user_input, species, sequence_type):
     # Ensembl lookup responses can return versioned transcript IDs (e.g. ENST... .9).
     # Try the returned ID first; if the sequence endpoint rejects it, retry the stable ID.
     sequence_ids = [transcript_id]
-    unversioned_id = re.sub(r"\.\d+$", "", transcript_id)
+    unversioned_id = re.sub(r"\\.\\d+$", "", transcript_id)
     if unversioned_id != transcript_id:
         sequence_ids.append(unversioned_id)
 
@@ -306,7 +287,6 @@ def fetch_ensembl(user_input, species, sequence_type):
 
 def fetch_ena(user_input):
     """Retrieve a nucleotide sequence by an ENA sequence accession."""
-    user_input = user_input.upper()
     if not re.match(r"^[A-Z]{1,6}_?\d{5,}(?:\.\d+)?$", user_input, re.IGNORECASE):
         raise ValueError(
             "ENA retrieval currently expects an individual sequence accession. "
