@@ -54,7 +54,7 @@ Requires Python 3.10 or newer. Run these commands from the folder that contains 
 ### Windows (PowerShell)
 
 ```powershell
-cd neohelix_demo
+cd neohelix_repo
 python -m venv .venv
 .venv\Scripts\Activate.ps1
 pip install -r requirements.txt
