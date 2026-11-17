@@ -55,11 +55,26 @@ byId("msaButton").addEventListener("click", async () => {
   button.disabled = true;
   try {
     const response = await fetch("/api/msa", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({sequences:byId("msaInput").value,match:byId("msaMatch").value,mismatch:byId("msaMismatch").value,gap:byId("msaGap").value})});
+    const contentType = response.headers.get("content-type") || "";
+
+    if (!contentType.includes("application/json")) {
+      const body = await response.text();
+      throw new Error(
+      `Server returned HTML instead of JSON. HTTP ${response.status}. ` +
+      body.slice(0, 250)
+  );
+}
+
     const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || "MSA failed.");
+}
     if (!response.ok) throw new Error(data.error);
     let html = `<h3>Progressive star multiple sequence alignment</h3><div class="stats"><div class="stat"><b>${data.rows.length}</b>Sequences</div><div class="stat"><b>${data.rows[0].sequence.length}</b>Alignment columns</div><div class="stat"><b>${escapeHtml(data.rows[data.center_index].name)}</b>Chosen centre sequence</div></div>`;
     data.rows.forEach(row => { html += `<div class="alignment"><div class="seqname">${escapeHtml(row.name)}</div><div class="seq">${escapeHtml(row.sequence)}</div></div>`; });
     html += `<div id="msaGrid" style="margin:14px 0"></div>`;
+    html += `<div id="msaTree" style="margin:14px 0"></div>`;
     html += `<h3 style="margin-top:18px">Consensus sequence</h3><div class="mono">${escapeHtml(data.analysis.consensus)}</div>`;
     html += `<h3 style="margin-top:18px">Conservation by position (%)</h3><div class="mono">${data.analysis.conservation.map((v,i)=>`${i+1}:${v}%`).join("   ")}</div>`;
     html += `<h3 style="margin-top:18px">Pairwise identity (%)</h3><table class="data-table"><tbody>`;
@@ -68,6 +83,7 @@ byId("msaButton").addEventListener("click", async () => {
     html += `</tbody></table><button class="download" id="downloadFasta">Download aligned FASTA</button>`;
     target.classList.remove("hidden"); target.innerHTML = html;
     MSAGrid.render(byId("msaGrid"), { rows: data.rows, analysis: data.analysis });
+    MSATree.render(byId("msaTree"), {rows: data.rows,analysis: data.analysis});
     byId("downloadFasta").addEventListener("click", () => {
       const fasta = data.rows.map(row => `>${row.name}\n${row.sequence}`).join("\n") + "\n";
       const blob = new Blob([fasta], {type:"text/plain"});
