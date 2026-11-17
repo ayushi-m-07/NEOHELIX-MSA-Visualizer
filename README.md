@@ -11,7 +11,10 @@ A small educational Flask web app built around the team's Needleman–Wunsch and
 - Consensus sequence and per-position conservation
 - Pairwise identity matrix for the resulting MSA
 - Basic DNA composition statistics in the API
-- NCBI / GenBank nucleotide retrieval using individual nucleotide accessions, NCBI Gene IDs and gene symbols
+- Multi-source nucleotide retrieval:
+  - NCBI / GenBank: nucleotide accessions, NCBI Gene IDs and gene symbols
+  - Ensembl: gene symbols, ENSG gene IDs and ENST transcript IDs
+  - ENA: individual nucleotide sequence accessions
 - Download aligned results as FASTA
 - Simple HTML/CSS/JavaScript interface; no frontend framework
 
@@ -91,19 +94,20 @@ This project uses Flask/Python, so **GitHub Pages alone cannot run it**. GitHub 
 
 The included `render.yaml` can help configure the service. Hosting providers may change their free-tier availability and terms.
 
-## NCBI / GenBank sequence retrieval
+## Multi-source sequence retrieval
 
-The Fetch a sequence panel uses NCBI Entrez (the NCBI Nucleotide database) to retrieve nucleotide records. It accepts:
+The Fetch a sequence panel supports three source choices:
 
-- An individual nucleotide accession, such as `NM_000546.6`
-- An NCBI Gene ID, such as `7157` for human TP53
-- A gene symbol, such as `TP53`, together with the organism name
+- **NCBI / GenBank:** uses NCBI Entrez. It accepts an individual nucleotide accession, an NCBI Gene ID, or a gene symbol. Gene-symbol searches are restricted to the organism entered by the user and resolve to a RefSeq mRNA record. The current implementation selects the first matching RefSeq mRNA record.
+- **Ensembl:** uses the Ensembl REST API. It accepts a gene symbol, an Ensembl gene ID (`ENSG...`), or an Ensembl transcript ID (`ENST...`). Gene symbols and gene IDs resolve to the canonical transcript. cDNA is the default sequence type; CDS and genomic sequence options are also provided.
+- **ENA:** retrieves an individual nucleotide sequence using its accession. Gene-symbol lookup is not implemented for ENA in this version.
 
-Gene-symbol searches are restricted to the organism entered by the user and resolve to a RefSeq mRNA record. The current implementation selects the first matching RefSeq mRNA record. A contact email is required by NCBI Entrez.
+For Ensembl canonical transcript retrieval, the app retries the unversioned stable transcript ID if the API rejects the versioned ID returned by gene lookup. ENA remains accession-based in this version; it does not resolve gene symbols.\n\nThe species field defaults to `Homo sapiens`. Ensembl species names are converted to the API's lowercase underscore format for a small set of common species names. NCBI uses the entered organism name in its Entrez search.
 
-**Important limitations:** GenBank records are accessed through NCBI's Nucleotide (`nuccore`) database; GenBank is not a separate independent sequence engine in this app. Genome assembly accessions such as `GCA_...` and `GCF_...` are not individual transcript accessions and are not supported by this retrieval route. SRA run accessions such as `SRR...` are also not supported. The app enforces a 100,000-base sequence limit so very long records may be rejected. Protein sequence retrieval is not supported.
+**Important limitations:** GenBank is accessed through NCBI's nuccore records here; it is not a separate independent sequence engine. Genome assembly accessions such as `GCA_...` and `GCF_...` are not individual transcript accessions and are not supported by this retrieval route. SRA run accessions such as `SRR...` are also not supported. The app enforces a 100,000-base sequence limit so very long genomic sequences may be rejected. Protein sequence retrieval is not supported.
 
-NCBI E-utilities documentation: https://www.ncbi.nlm.nih.gov/books/NBK25499/.
+
+NCBI Entrez requires a contact email. Example accession: `NM_000546.6` (human TP53 mRNA). NCBI E-utilities documentation: https://www.ncbi.nlm.nih.gov/books/NBK25499/.
 
 ## Suggested viva explanation
 
