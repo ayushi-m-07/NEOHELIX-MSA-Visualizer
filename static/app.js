@@ -9,17 +9,67 @@ function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, (char) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
 }
 
+
 function showAlignment(target, title, result) {
   target.classList.remove("hidden");
+
   const a = result.aligned_seq1;
   const b = result.aligned_seq2;
+
   let markers = "";
-  for (let i = 0; i < a.length; i++) markers += a[i] === b[i] ? "|" : " ";
-  let html = `<h3>${escapeHtml(title)}</h3><div class="stats"><div class="stat"><b>${result.score}</b>Alignment score</div><div class="stat"><b>${a.length}</b>Alignment columns</div></div>`;
-  html += `<div class="mono">${escapeHtml(a)}\n<span class="matchline">${escapeHtml(markers)}</span>\n${escapeHtml(b)}</div>`;
-  html += `<h3 style="margin-top:18px">Dynamic-programming score matrix</h3>${matrixTable(result.matrix, result.path)}`;
+  for (let i = 0; i < a.length; i++) {
+    markers += a[i] === b[i] ? "|" : " ";
+  }
+
+  let html = `
+    <h3>${escapeHtml(title)}</h3>
+
+    <div class="stats">
+      <div class="stat">
+        <b>${result.score}</b>
+        Alignment score
+      </div>
+      <div class="stat">
+        <b>${a.length}</b>
+        Alignment columns
+      </div>
+    </div>
+
+    <h3 style="margin-top:18px">Optimal alignment</h3>
+
+    <div class="mono">${escapeHtml(a)}
+<span class="matchline">${escapeHtml(markers)}</span>
+${escapeHtml(b)}</div>
+  `;
+
+  // Display the complete DP matrix only for small sequences.
+  const maxLength = Math.max(a.length, b.length);
+
+  if (result.matrix && maxLength <= 50) {
+    html += `
+      <h3 style="margin-top:18px">
+        Dynamic-programming score matrix
+      </h3>
+      <p>Highlighted cells show the optimal traceback path.</p>
+      ${matrixTable(result.matrix, result.path)}
+    `;
+  } else {
+    html += `
+      <h3 style="margin-top:18px">
+        Dynamic-programming score matrix
+      </h3>
+      <p>
+        The full matrix is hidden for large sequences
+        to keep the interface responsive.
+        The alignment score and optimal alignment are
+        still available above.
+      </p>
+    `;
+  }
+
   target.innerHTML = html;
 }
+
 
 function matrixTable(matrix, path) {
   const pathKeys = new Set(path.map(([i,j]) => `${i},${j}`));
@@ -94,64 +144,17 @@ byId("msaButton").addEventListener("click", async () => {
   finally { button.disabled = false; }
 });
 
-function updateFetchFields() {
-  const source = byId("database").value;
-  byId("emailLabel").style.display = source === "ncbi" ? "" : "none";
-  byId("sequenceTypeLabel").style.display = source === "ensembl" ? "" : "none";
-
-  if (source === "ena") {
-    byId("identifier").placeholder = "e.g. AB000263.1";
-    byId("fetchHelp").textContent =
-      "ENA currently retrieves individual nucleotide records by accession. Gene-symbol search is not enabled for ENA in this version.";
-  } else if (source === "ensembl") {
-    byId("identifier").placeholder = "e.g. TP53, ENSG00000141510, ENST00000269305";
-    byId("fetchHelp").textContent =
-      "Ensembl accepts gene symbols, Ensembl gene IDs (ENSG) and transcript IDs (ENST). A gene symbol resolves to its canonical transcript.";
-  } else {
-    byId("identifier").placeholder = "e.g. TP53, 7157, NM_000546.6";
-    byId("fetchHelp").textContent =
-      "NCBI accepts gene symbols, NCBI Gene IDs, and individual nucleotide accessions. Assembly accessions (GCA_/GCF_) are not individual transcript records.";
-  }
-}
-
-byId("database").addEventListener("change", updateFetchFields);
-updateFetchFields();
-
-byId("fetchButton").addEventListener("click", async () => {
-  const button = byId("fetchButton");
+byId("ncbiButton").addEventListener("click", async () => {
+  const button = byId("ncbiButton");
   const target = byId("ncbiResult");
   button.disabled = true;
   try {
-    const response = await fetch("/api/fetch-sequence", {
-      method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({
-        source: byId("database").value,
-        identifier: byId("identifier").value,
-        species: byId("species").value,
-        sequence_type: byId("sequenceType").value,
-        email: byId("email").value
-      })
-    });
+    const response = await fetch("/api/ncbi", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({accession:byId("accession").value,email:byId("email").value})});
     const data = await response.json();
-    if (!response.ok) throw new Error(data.error || "Sequence retrieval failed.");
-
+    if (!response.ok) throw new Error(data.error);
     target.classList.remove("hidden");
-    target.innerHTML =
-      `<h3>${escapeHtml(data.description)}</h3>` +
-      `<div class="stats">` +
-      `<div class="stat"><b>${data.length}</b>Base pairs</div>` +
-      `<div class="stat"><b>${escapeHtml(data.accession)}</b>Identifier</div>` +
-      `<div class="stat"><b>${escapeHtml(data.source)}</b>Database</div>` +
-      `</div><div class="mono">${escapeHtml(data.sequence)}</div>` +
-      `<button class="download" id="addFetched">Add fetched sequence to MSA input</button>`;
-    byId("addFetched").addEventListener("click", () => {
-      const box = byId("msaInput");
-      box.value += `\n>${data.accession}\n${data.sequence}`;
-    });
-  } catch (error) {
-    showError(target, error.message);
-  } finally {
-    button.disabled = false;
-  }
+    target.innerHTML = `<h3>${escapeHtml(data.description)}</h3><div class="stats"><div class="stat"><b>${data.length}</b>Base pairs</div><div class="stat"><b>${escapeHtml(data.accession)}</b>Accession</div></div><div class="mono">${escapeHtml(data.sequence)}</div><button class="download" id="addFetched">Add fetched sequence to MSA input</button>`;
+    byId("addFetched").addEventListener("click", () => { const box = byId("msaInput"); box.value += `\n>${data.accession}\n${data.sequence}`; });
+  } catch (error) { showError(target, error.message); }
+  finally { button.disabled = false; }
 });
