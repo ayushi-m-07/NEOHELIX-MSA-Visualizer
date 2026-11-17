@@ -112,7 +112,7 @@ def smith_waterman(seq1, seq2, match=1, mismatch=-1, gap=-2, include_visual_data
             j -= 1
         path.append((i, j))
 
-        result = {
+    result = {
         "score": int(best_score),
         "aligned_seq1": aligned1,
         "aligned_seq2": aligned2,
@@ -125,7 +125,6 @@ def smith_waterman(seq1, seq2, match=1, mismatch=-1, gap=-2, include_visual_data
         result["path"] = list(reversed(path))
 
     return result
-
 
 def _alignment_slots(aligned_center, aligned_other):
     """Split an aligned pair into insertions around each center base."""
