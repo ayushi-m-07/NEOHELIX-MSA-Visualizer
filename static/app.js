@@ -94,29 +94,6 @@ byId("msaButton").addEventListener("click", async () => {
   finally { button.disabled = false; }
 });
 
-function updateFetchFields() {
-  const source = byId("database").value;
-  byId("emailLabel").style.display = source === "ncbi" ? "" : "none";
-  byId("sequenceTypeLabel").style.display = source === "ensembl" ? "" : "none";
-
-  if (source === "ena") {
-    byId("identifier").placeholder = "e.g. AB000263.1";
-    byId("fetchHelp").textContent =
-      "ENA currently retrieves individual nucleotide records by accession. Gene-symbol search is not enabled for ENA in this version.";
-  } else if (source === "ensembl") {
-    byId("identifier").placeholder = "e.g. TP53, ENSG00000141510, ENST00000269305";
-    byId("fetchHelp").textContent =
-      "Ensembl accepts gene symbols, Ensembl gene IDs (ENSG) and transcript IDs (ENST). A gene symbol resolves to its canonical transcript.";
-  } else {
-    byId("identifier").placeholder = "e.g. TP53, 7157, NM_000546.6";
-    byId("fetchHelp").textContent =
-      "NCBI accepts gene symbols, NCBI Gene IDs, and individual nucleotide accessions. Assembly accessions (GCA_/GCF_) are not individual transcript records.";
-  }
-}
-
-byId("database").addEventListener("change", updateFetchFields);
-updateFetchFields();
-
 byId("fetchButton").addEventListener("click", async () => {
   const button = byId("fetchButton");
   const target = byId("ncbiResult");
@@ -126,13 +103,16 @@ byId("fetchButton").addEventListener("click", async () => {
       method: "POST",
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify({
-        source: byId("database").value,
         identifier: byId("identifier").value,
         species: byId("species").value,
-        sequence_type: byId("sequenceType").value,
         email: byId("email").value
       })
     });
+    const contentType = response.headers.get("content-type") || "";
+    if (!contentType.includes("application/json")) {
+      const body = await response.text();
+      throw new Error(`Server returned a non-JSON response (HTTP ${response.status}). ${body.slice(0, 250)}`);
+    }
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Sequence retrieval failed.");
 
