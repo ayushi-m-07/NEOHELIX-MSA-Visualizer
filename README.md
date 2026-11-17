@@ -102,7 +102,7 @@ The Fetch a sequence panel supports three source choices:
 - **Ensembl:** uses the Ensembl REST API. It accepts a gene symbol, an Ensembl gene ID (`ENSG...`), or an Ensembl transcript ID (`ENST...`). Gene symbols and gene IDs resolve to the canonical transcript. cDNA is the default sequence type; CDS and genomic sequence options are also provided.
 - **ENA:** retrieves an individual nucleotide sequence using its accession. Gene-symbol lookup is not implemented for ENA in this version.
 
-The species field defaults to `Homo sapiens`. Ensembl species names are converted to the API's lowercase underscore format for a small set of common species names. NCBI uses the entered organism name in its Entrez search.
+For Ensembl canonical transcript retrieval, the app retries the unversioned stable transcript ID if the API rejects the versioned ID returned by gene lookup. ENA remains accession-based in this version; it does not resolve gene symbols.\n\nThe species field defaults to `Homo sapiens`. Ensembl species names are converted to the API's lowercase underscore format for a small set of common species names. NCBI uses the entered organism name in its Entrez search.
 
 **Important limitations:** GenBank is accessed through NCBI's nuccore records here; it is not a separate independent sequence engine. Genome assembly accessions such as `GCA_...` and `GCF_...` are not individual transcript accessions and are not supported by this retrieval route. SRA run accessions such as `SRR...` are also not supported. The app enforces a 100,000-base sequence limit so very long genomic sequences may be rejected. Protein sequence retrieval is not supported.
 
