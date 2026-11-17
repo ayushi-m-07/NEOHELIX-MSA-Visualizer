@@ -1,402 +1,138 @@
-"""Flask web application for the NEOHELIX educational MSA demo."""
+# NEOHELIX — Sequence Alignment Workbench
 
-import os
-import re
-import json
-import urllib.parse
-import urllib.request
-import urllib.error
+A small educational Flask web app built around the team's Needleman–Wunsch and Smith–Waterman code. It adds a basic progressive star multiple-sequence alignment workflow with a colour-coded alignment grid.
 
-from flask import Flask, jsonify, render_template, request
-from Bio import Entrez, SeqIO
-from io import StringIO
+## Included features
 
-from backend import (
-    alignment_analysis,
-    needleman_wunsch,
-    progressive_star_msa,
-    sequence_stats,
-    smith_waterman,
-)
+- Needleman–Wunsch global pairwise alignment, with score matrix and traceback path
+- Smith–Waterman local pairwise alignment, with score matrix and traceback path
+- Progressive star MSA for 2–8 DNA/RNA sequences
+- **Colour-coded alignment grid** with three views (bases, conservation, differences)
+- Consensus sequence and per-position conservation
+- Pairwise identity matrix for the resulting MSA
+- Basic DNA composition statistics in the API
+- Multi-source nucleotide retrieval:
+  - NCBI / GenBank: nucleotide accessions, NCBI Gene IDs and gene symbols
+  - Ensembl: gene symbols, ENSG gene IDs and ENST transcript IDs
+  - ENA: individual nucleotide sequence accessions
+- Download aligned results as FASTA
+- Simple HTML/CSS/JavaScript interface; no frontend framework
 
-app = Flask(__name__)
-DNA_LETTERS = set("ACGTRYSWKMBDHVN")
-MAX_SEQUENCE_LENGTH = 100000
+## Important algorithm note
 
+NW and SW are pairwise algorithms: each aligns two sequences. The MSA feature is a separate, educational **progressive star strategy**. It selects a centre sequence using summed pairwise NW scores, aligns every other sequence to that centre, and merges insertions into shared columns. This is a simplified teaching implementation, not a production-grade MSA package such as MAFFT or MUSCLE.
 
-def clean_sequence(sequence):
-    """Clean and validate a DNA/RNA sequence."""
-    cleaned = re.sub(r"\s+", "", str(sequence)).upper()
-    if not cleaned:
-        raise ValueError("The retrieved record did not contain a nucleotide sequence.")
-    invalid = set(cleaned) - DNA_LETTERS - {"U"}
-    if invalid:
-        raise ValueError(
-            "The retrieved record is not a supported nucleotide sequence. "
-            f"Unexpected characters: {', '.join(sorted(invalid))}"
-        )
-    return cleaned.replace("U", "T")
+The scoring model uses a match score, mismatch score and one constant gap penalty. It does not implement affine gap-open/gap-extension penalties. Input is DNA/RNA; U is converted to T. Protein alignment and substitution matrices such as BLOSUM are not implemented.
 
+## Colour-coded alignment grid
 
-def parse_sequences(text):
-    """Read FASTA text or one sequence per line."""
-    records = []
-    current_name = None
-    current_sequence = []
-    lines = [line.strip() for line in text.splitlines() if line.strip()]
-    if not lines:
-        raise ValueError("Paste at least two sequences.")
+After a multiple alignment runs, the result is drawn as a colour-coded grid by `static/msa_grid.js`. The module has no dependencies and injects its own CSS, so it does not need changes to `style.css`.
 
-    if any(line.startswith(">") for line in lines):
-        for line in lines:
-            if line.startswith(">"):
-                if current_name is not None:
-                    records.append((current_name, clean_sequence("".join(current_sequence))))
-                current_name = line[1:].strip() or "Sequence " + str(len(records) + 1)
-                current_sequence = []
-            else:
-                if current_name is None:
-                    raise ValueError("FASTA sequence data must follow a header beginning with >.")
-                current_sequence.append(line)
-        if current_name is not None:
-            records.append((current_name, clean_sequence("".join(current_sequence))))
-    else:
-        for index, line in enumerate(lines, start=1):
-            records.append(("Sequence " + str(index), clean_sequence(line)))
+**Views** (switch with the buttons above the grid):
 
-    if len(records) < 2:
-        raise ValueError("MSA needs at least two sequences.")
-    if len(records) > 8:
-        raise ValueError("This demo supports up to 8 sequences.")
-    return records
+- **Bases:** each cell is coloured by nucleotide: green for A, red for T/U, amber for G, blue for C. Gaps are dimmed.
+- **Conservation:** cells are brighter where the column is more conserved across the sequences.
+- **Differences:** cells that match the consensus show as dots; only bases that differ are coloured and outlined.
 
+**Other elements:**
 
-def http_get(url, accept="application/json"):
-    """Small standard-library HTTP helper for public database APIs."""
-    req = urllib.request.Request(
-        url,
-        headers={
-            "Accept": accept,
-            "User-Agent": "NEOHELIX-MSA-Visualizer/1.0 (educational sequence retrieval)"
-        },
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=25) as response:
-            return response.read().decode("utf-8")
-    except urllib.error.HTTPError as error:
-        detail = error.read().decode("utf-8", errors="replace")[:300]
-        if error.code == 404:
-            raise ValueError("No matching record was found in that database.") from error
-        raise ValueError(f"Database request failed (HTTP {error.code}): {detail}") from error
-    except (urllib.error.URLError, TimeoutError) as error:
-        raise ValueError("Could not reach the database service. Please try again shortly.") from error
+- A position ruler above the alignment, a conservation bar chart and the consensus row below it.
+- Hovering a cell shows the sequence name, the alignment column, the residue number within the original sequence, the column conservation and the consensus base.
+- A cell-size slider for zooming long alignments. Sequence names stay fixed while the grid scrolls sideways.
 
+**How it connects to the rest of the app:** `static/app.js` receives `rows` and `analysis` from `/api/msa` and calls:
 
-def species_to_ensembl(species):
-    """Convert common species labels to Ensembl's lowercase underscore format."""
-    value = (species or "Homo sapiens").strip().lower()
-    aliases = {
-        "human": "homo_sapiens",
-        "homo sapiens": "homo_sapiens",
-        "mouse": "mus_musculus",
-        "mus musculus": "mus_musculus",
-        "rat": "rattus_norvegicus",
-        "rattus norvegicus": "rattus_norvegicus",
-        "zebrafish": "danio_rerio",
-        "danio rerio": "danio_rerio",
-        "fruit fly": "drosophila_melanogaster",
-        "drosophila melanogaster": "drosophila_melanogaster",
-        "yeast": "saccharomyces_cerevisiae",
-        "saccharomyces cerevisiae": "saccharomyces_cerevisiae",
-    }
-    return aliases.get(value, re.sub(r"\s+", "_", value))
+```js
+MSAGrid.render(byId("msaGrid"), { rows: data.rows, analysis: data.analysis });
+```
+
+`index.html` loads `msa_grid.js` before `app.js`. If `analysis` is missing, the module recomputes the consensus and conservation using the same definition as `alignment_analysis` in `backend.py` (percentage of all sequences sharing the most common base in that column; gaps count in the denominator).
+
+**Limitation:** the grid draws one element per cell, which is fine for the 8-sequence limit and a few thousand alignment columns. Very long alignments (for example, several full-length NCBI genes) would need a length cap or a canvas-based version.
+
+## Run locally
+
+Requires Python 3.10 or newer. Run these commands from the folder that contains `app.py` (if you cloned the repository, that is the repository folder).
+
+### Windows (PowerShell)
+
+```powershell
+cd neohelix_repo
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+python app.py
+```
+
+If PowerShell refuses to activate the environment, run `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once and activate again. In Command Prompt, activate with `.venv\Scripts\activate.bat` instead.
+
+### macOS / Linux
+
+```bash
+cd neohelix_demo
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python app.py
+```
+
+On macOS, port 5000 may already be used by AirPlay Receiver. If so, run `PORT=5001 python app.py` and open port 5001. On Windows PowerShell, set it with `$env:PORT=5001; python app.py`.
+
+### Open the app
+
+Open `http://127.0.0.1:5000` in your browser for local testing. This is not the public deployment URL. After editing `app.js`, `msa_grid.js` or `style.css`, refresh the page with Ctrl+Shift+R (Cmd+Shift+R on macOS) so the browser does not use cached files. Changes to Python files need the server to be restarted.
+
+## Deploy as a public website
+
+This project uses Flask/Python, so **GitHub Pages alone cannot run it**. GitHub stores the source code; a Python-capable host runs the backend.
+
+1. Create a GitHub repository and upload the contents of this folder (not the outer ZIP).
+2. On Render, choose **New → Web Service**, connect the GitHub repository, and select the project root.
+3. Use build command: `pip install -r requirements.txt`
+4. Use start command: `gunicorn app:app`
+5. Deploy. Render will provide a public HTTPS URL after a successful deployment.
+
+The included `render.yaml` can help configure the service. Hosting providers may change their free-tier availability and terms.
+
+## Multi-source sequence retrieval
+
+The Fetch a sequence panel supports three source choices:
+
+- **NCBI / GenBank:** uses NCBI Entrez. It accepts an individual nucleotide accession, an NCBI Gene ID, or a gene symbol. Gene-symbol searches are restricted to the organism entered by the user and resolve to a RefSeq mRNA record. The current implementation selects the first matching RefSeq mRNA record.
+- **Ensembl:** uses the Ensembl REST API. It accepts a gene symbol, an Ensembl gene ID (`ENSG...`), or an Ensembl transcript ID (`ENST...`). Gene symbols and gene IDs resolve to the canonical transcript. cDNA is the default sequence type; CDS and genomic sequence options are also provided.
+- **ENA:** retrieves an individual nucleotide sequence using its accession. Gene-symbol lookup is not implemented for ENA in this version.
+
+For Ensembl canonical transcript retrieval, the app retries the unversioned stable transcript ID if the API rejects the versioned ID returned by gene lookup. ENA remains accession-based in this version; it does not resolve gene symbols.\n\nThe species field defaults to `Homo sapiens`. Ensembl species names are converted to the API's lowercase underscore format for a small set of common species names. NCBI uses the entered organism name in its Entrez search.
+
+**Important limitations:** GenBank is accessed through NCBI's nuccore records here; it is not a separate independent sequence engine. Genome assembly accessions such as `GCA_...` and `GCF_...` are not individual transcript accessions and are not supported by this retrieval route. SRA run accessions such as `SRR...` are also not supported. The app enforces a 100,000-base sequence limit so very long genomic sequences may be rejected. Protein sequence retrieval is not supported.
 
 
-def make_result(accession, description, raw_sequence, source):
-    sequence = clean_sequence(raw_sequence)
-    if len(sequence) > MAX_SEQUENCE_LENGTH:
-        raise ValueError(
-            f"This sequence has {len(sequence):,} bases, exceeding NEOHELIX's "
-            f"{MAX_SEQUENCE_LENGTH:,}-base retrieval limit. Choose a shorter transcript or record."
-        )
-    return {
-        "source": source,
-        "accession": accession,
-        "description": description,
-        "sequence": sequence,
-        "length": len(sequence),
-        "fasta": f">{accession} {description}\n{sequence}\n",
-    }
+NCBI Entrez requires a contact email. Example accession: `NM_000546.6` (human TP53 mRNA). NCBI E-utilities documentation: https://www.ncbi.nlm.nih.gov/books/NBK25499/.
 
+## Suggested viva explanation
 
-def fetch_ncbi(user_input, email, species):
-    """Retrieve a nucleotide record or resolve a gene symbol/NCBI Gene ID."""
-    if not email or "@" not in email:
-        raise ValueError("Enter a contact email for NCBI Entrez.")
+- `needleman_wunsch`: initializes the first row/column with gap penalties, fills each cell using diagonal/up/left scores, then traces back from the bottom-right.
+- `smith_waterman`: uses the same recurrence but includes zero as a candidate, remembers the highest-scoring cell, and traces back until a zero cell.
+- `progressive_star_msa`: chooses a centre, aligns every sequence to it with NW, then merges insertions into shared slots.
+- `alignment_analysis`: calculates a majority consensus, column conservation and pairwise identity from aligned rows.
+- `app.py`: validates input and exposes the Python functions through Flask routes used by the browser.
+- `static/app.js`: sends input to Flask and renders returned results. The alignment algorithms remain in Python.
+- `static/msa_grid.js`: draws the returned alignment as a colour-coded grid (bases, conservation and difference views) in the browser. It only displays results; it does not align anything.
 
-    Entrez.email = email
-    Entrez.tool = "NEOHELIX_MSA_Visualizer"
-    organism = (species or "Homo sapiens").strip()
+## Project structure
 
-    if re.match(r"^(SRR|ERR|DRR)\d+$", user_input, re.IGNORECASE):
-        raise ValueError("SRA run IDs are not supported by this nucleotide-record fetcher.")
-    if re.match(r"^(NP_|XP_|YP_|WP_)", user_input, re.IGNORECASE):
-        raise ValueError("Protein accessions are not supported. Choose a nucleotide sequence.")
-
-    gene_id = None
-    nucleotide_id = None
-
-    gene_match = re.match(r"^(\d+)(?:\s*[-—]\s*.*)?$", user_input)
-    accession_match = re.match(
-        r"^(?:[A-Z]{1,6}_?\d{5,}|[A-Z]\d{5,})(?:\.\d+)?$",
-        user_input,
-        re.IGNORECASE
-    )
-
-    if gene_match:
-        gene_id = gene_match.group(1)
-    elif accession_match:
-        nucleotide_id = user_input
-    else:
-        term = f'{user_input}[Gene Name] AND "{organism}"[Organism]'
-        with Entrez.esearch(db="gene", term=term, retmax=10) as handle:
-            gene_results = Entrez.read(handle)
-        gene_ids = gene_results["IdList"]
-        if not gene_ids:
-            raise ValueError(f"No gene named '{user_input}' was found for {organism}.")
-        if len(gene_ids) > 1:
-            raise ValueError(
-                f"'{user_input}' matched multiple genes for {organism}. "
-                "Try a more specific gene symbol or NCBI Gene ID."
-            )
-        gene_id = gene_ids[0]
-
-    if gene_id:
-        term = (
-            f"{gene_id}[GeneID] AND biomol_mrna[PROP] "
-            f"AND srcdb_refseq[PROP] AND {organism}[Organism]"
-        )
-        with Entrez.esearch(db="nuccore", term=term, retmax=20) as handle:
-            nucleotide_results = Entrez.read(handle)
-        ids = nucleotide_results["IdList"]
-        if not ids:
-            raise ValueError(
-                f"No RefSeq mRNA records were found for Gene ID {gene_id} "
-                f"in {organism}."
-            )
-        nucleotide_id = ids[0]
-
-    with Entrez.efetch(
-        db="nuccore", id=nucleotide_id, rettype="gb", retmode="xml"
-    ) as handle:
-        records = Entrez.read(handle)
-    if not records:
-        raise ValueError("NCBI returned no nucleotide record.")
-
-    record = records[0]
-    return make_result(
-        record.get("GBSeq_accession-version", nucleotide_id),
-        record.get("GBSeq_definition", "NCBI nucleotide record"),
-        record.get("GBSeq_sequence", ""),
-        "NCBI / GenBank",
-    )
-
-
-def fetch_ensembl(user_input, species, sequence_type):
-    """Resolve an Ensembl gene/transcript and retrieve its nucleotide sequence."""
-    ensembl_species = species_to_ensembl(species)
-    encoded_species = urllib.parse.quote(ensembl_species, safe="_")
-    encoded_input = urllib.parse.quote(user_input, safe="")
-
-    if re.match(r"^ENST\\d+(?:\\.\\d+)?$", user_input, re.IGNORECASE):
-        transcript_id = user_input
-        description = f"Ensembl transcript {transcript_id}"
-    elif re.match(r"^ENSG\\d+(?:\\.\\d+)?$", user_input, re.IGNORECASE):
-        lookup_url = (
-            f"https://rest.ensembl.org/lookup/id/{encoded_input}"
-            "?expand=1;content-type=application/json"
-        )
-        lookup = json.loads(http_get(lookup_url))
-        if lookup.get("species") and lookup["species"].lower() != ensembl_species:
-            raise ValueError(
-                f"This Ensembl ID belongs to {lookup['species']}, not {species}."
-            )
-        transcript_id = lookup.get("canonical_transcript")
-        if not transcript_id:
-            raise ValueError(
-                "Ensembl found the gene, but did not provide a canonical transcript."
-            )
-        description = (
-            f"{lookup.get('display_name', user_input)} — "
-            f"{lookup.get('description', 'Ensembl gene')}"
-        )
-    else:
-        lookup_url = (
-            f"https://rest.ensembl.org/lookup/symbol/{encoded_species}/"
-            f"{encoded_input}?expand=1;content-type=application/json"
-        )
-        lookup = json.loads(http_get(lookup_url))
-        if lookup.get("object_type") != "Gene":
-            raise ValueError(
-                "The Ensembl symbol did not resolve to a gene. "
-                "Try an ENSG or ENST identifier."
-            )
-        transcript_id = lookup.get("canonical_transcript")
-        if not transcript_id:
-            raise ValueError(
-                "Ensembl found the gene, but did not provide a canonical transcript."
-            )
-        description = (
-            f"{lookup.get('display_name', user_input)} — "
-            f"{lookup.get('description', 'Ensembl gene')}"
-        )
-
-    allowed_types = {"cdna", "cds", "genomic"}
-    if sequence_type not in allowed_types:
-        raise ValueError("Choose cDNA, CDS, or genomic sequence type.")
-
-    # Ensembl lookup responses can return versioned transcript IDs (e.g. ENST... .9).
-    # Try the returned ID first; if the sequence endpoint rejects it, retry the stable ID.
-    sequence_ids = [transcript_id]
-    unversioned_id = re.sub(r"\\.\\d+$", "", transcript_id)
-    if unversioned_id != transcript_id:
-        sequence_ids.append(unversioned_id)
-
-    last_error = None
-    for sequence_id in sequence_ids:
-        sequence_url = (
-            "https://rest.ensembl.org/sequence/id/"
-            f"{urllib.parse.quote(sequence_id, safe='')}"
-            f"?type={sequence_type};content-type=text/plain"
-        )
-        try:
-            sequence = http_get(sequence_url, accept="text/plain").strip()
-            return make_result(
-                transcript_id,
-                description + f" ({sequence_type})",
-                sequence,
-                "Ensembl",
-            )
-        except ValueError as error:
-            last_error = error
-            if "No matching record" not in str(error):
-                raise
-
-    raise last_error or ValueError("Ensembl could not retrieve this sequence.")
-
-
-def fetch_ena(user_input):
-    """Retrieve a nucleotide sequence by an ENA sequence accession."""
-    if not re.match(r"^[A-Z]{1,6}_?\d{5,}(?:\.\d+)?$", user_input, re.IGNORECASE):
-        raise ValueError(
-            "ENA retrieval currently expects an individual sequence accession. "
-            "Use a sequence accession, not a gene symbol or genome assembly accession."
-        )
-    url = (
-        "https://www.ebi.ac.uk/ena/browser/api/fasta/"
-        + urllib.parse.quote(user_input, safe=".")
-    )
-    fasta_text = http_get(url, accept="text/x-fasta")
-    records = list(SeqIO.parse(StringIO(fasta_text), "fasta"))
-    if not records:
-        raise ValueError("ENA returned no FASTA sequence for that accession.")
-    record = records[0]
-    return make_result(
-        record.id,
-        record.description,
-        str(record.seq),
-        "ENA",
-    )
-
-
-@app.get("/")
-def home():
-    return render_template("index.html")
-
-
-@app.get("/health")
-def health():
-    return jsonify({"status": "ok"})
-
-
-@app.post("/api/pairwise")
-def pairwise():
-    try:
-        data = request.get_json(force=True)
-        seq1 = clean_sequence(data.get("seq1", ""))
-        seq2 = clean_sequence(data.get("seq2", ""))
-        mode = data.get("mode", "global")
-        match = int(data.get("match", 1))
-        mismatch = int(data.get("mismatch", -1))
-        gap = int(data.get("gap", -2))
-        result = (
-            smith_waterman(seq1, seq2, match, mismatch, gap)
-            if mode == "local"
-            else needleman_wunsch(seq1, seq2, match, mismatch, gap)
-        )
-        return jsonify({"mode": mode, "result": result})
-    except (ValueError, TypeError) as error:
-        return jsonify({"error": str(error)}), 400
-
-
-@app.post("/api/msa")
-def msa():
-    try:
-        data = request.get_json(force=True)
-        records = parse_sequences(data.get("sequences", ""))
-        sequences = [sequence for _, sequence in records]
-        match = int(data.get("match", 1))
-        mismatch = int(data.get("mismatch", -1))
-        gap = int(data.get("gap", -2))
-        result = progressive_star_msa(sequences, match, mismatch, gap)
-        analysis = alignment_analysis(result["aligned"])
-        rows = [
-            {"name": records[i][0], "sequence": result["aligned"][i],
-             "stats": sequence_stats(records[i][1])}
-            for i in range(len(records))
-        ]
-        return jsonify({
-            "rows": rows,
-            "center_index": result["center_index"],
-            "center_sequence": result["center_sequence"],
-            "pairwise_score_totals": result["pairwise_score_totals"],
-            "analysis": analysis,
-        })
-    except (ValueError, TypeError) as error:
-        return jsonify({"error": str(error)}), 400
-
-
-@app.post("/api/fetch-sequence")
-def fetch_sequence():
-    try:
-        data = request.get_json(force=True)
-        user_input = str(data.get("identifier", "")).strip()
-        source = str(data.get("source", "ncbi")).lower()
-        email = str(data.get("email", "")).strip()
-        species = str(data.get("species", "Homo sapiens")).strip()
-        sequence_type = str(data.get("sequence_type", "cdna")).lower()
-
-        if not user_input:
-            raise ValueError("Enter a gene symbol, database ID, or sequence accession.")
-
-        if source in {"ncbi", "genbank"}:
-            result = fetch_ncbi(user_input, email, species)
-        elif source == "ensembl":
-            result = fetch_ensembl(user_input, species, sequence_type)
-        elif source == "ena":
-            result = fetch_ena(user_input)
-        else:
-            raise ValueError("Choose NCBI / GenBank, Ensembl, or ENA.")
-
-        return jsonify(result)
-    except Exception as error:
-        return jsonify({"error": f"Sequence retrieval failed: {error}"}), 400
-
-
-
-if __name__ == "__main__":
-    app.run(
-        host="0.0.0.0",
-        port=int(os.environ.get("PORT", 5000)),
-        debug=False
-    )
+```text
+neohelix_demo/
+├── app.py
+├── backend.py
+├── templates/
+│   └── index.html
+├── static/
+│   ├── app.js
+│   ├── msa_grid.js
+│   └── style.css
+├── requirements.txt
+├── Procfile
+├── render.yaml
+└── README.md
+```
