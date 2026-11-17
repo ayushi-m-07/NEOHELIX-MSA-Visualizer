@@ -18,17 +18,6 @@
   </header>
 
   <main>
-    <section class="intro"><div><div class="eyebrow">SEQUENCE ANALYSIS PLATFORM</div><h2>Explore sequence relationships.</h2><p>Align two sequences with NW/SW, or compare several sequences using a simple progressive star MSA.</p></div><div class="helix">
-    <div class="helix-structure">
-        <div class="strand strand-one"></div>
-        <div class="strand strand-two"></div>
-        <div class="rungs">
-            <span></span><span></span><span></span><span></span>
-            <span></span><span></span><span></span><span></span>
-            <span></span><span></span><span></span><span></span>
-        </div>
-    </div>
-</div></section>
     <section class="intro">
       <div>
         <div class="eyebrow">SEQUENCE ANALYSIS PLATFORM</div>
@@ -111,14 +100,10 @@ ATCGATC</textarea>
 
       <div class="controls ncbi">
         <label>Database
-          <select id="database">
-            <option value="ncbi">NCBI / GenBank</option>
-            <option value="ensembl">Ensembl</option>
-            <option value="ena">European Nucleotide Archive (ENA)</option>
-          </select>
+          <input id="databaseDisplay" value="NCBI / GenBank (Nucleotide)" readonly>
         </label>
 
-        <label>Gene symbol / ID / accession
+        <label>Gene symbol / NCBI Gene ID / accession
           <input id="identifier" placeholder="e.g. TP53, 7157, NM_000546.6">
         </label>
 
@@ -126,15 +111,7 @@ ATCGATC</textarea>
           <input id="species" value="Homo sapiens" placeholder="e.g. Homo sapiens">
         </label>
 
-        <label id="sequenceTypeLabel">Sequence type
-          <select id="sequenceType">
-            <option value="cdna">cDNA (transcript)</option>
-            <option value="cds">CDS (coding sequence)</option>
-            <option value="genomic">Genomic</option>
-          </select>
-        </label>
-
-        <label id="emailLabel">Contact email (NCBI only)
+        <label>Contact email (required by NCBI)
           <input id="email" type="email" placeholder="you@example.com">
         </label>
 
@@ -142,14 +119,14 @@ ATCGATC</textarea>
       </div>
 
       <p class="helper" id="fetchHelp">
-        NCBI accepts gene symbols, NCBI Gene IDs, and individual nucleotide accessions. Assembly accessions (GCA_/GCF_) are not individual transcript records.
+        Retrieves nucleotide records from NCBI. Enter an individual nucleotide accession, an NCBI Gene ID, or a gene symbol. Gene-symbol searches are restricted to the organism entered and resolve to a RefSeq mRNA record. Genome assembly and SRA run accessions are not supported by this fetcher.
       </p>
 
       <div id="ncbiResult" class="result hidden"></div>
     </section>
 
     <footer>
-      NEOHELIX • Educational implementation • DNA/RNA input (U is converted to T) • Maximum 8 sequences • Sequence retrieval supports NCBI/GenBank, Ensembl and ENA; ENA currently uses individual sequence accessions
+      NEOHELIX • Educational implementation • DNA/RNA input (U is converted to T) • Maximum 8 sequences • Sequence retrieval: NCBI / GenBank (Nucleotide)
     </footer>
   </main>
 
