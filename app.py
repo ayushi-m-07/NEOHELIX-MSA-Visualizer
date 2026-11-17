@@ -166,6 +166,7 @@ def health():
     return jsonify({"status": "ok"})
 
 
+
 @app.post("/api/pairwise")
 def pairwise():
     try:
@@ -176,14 +177,26 @@ def pairwise():
         match = int(data.get("match", 1))
         mismatch = int(data.get("mismatch", -1))
         gap = int(data.get("gap", -2))
-        result = (
-            smith_waterman(seq1, seq2, match, mismatch, gap)
-            if mode == "local"
-            else needleman_wunsch(seq1, seq2, match, mismatch, gap)
-        )
+
+        # Show the DP matrix only for small sequences.
+        include_matrix = max(len(seq1), len(seq2)) <= 50
+
+        if mode == "local":
+            result = smith_waterman(
+                seq1, seq2, match, mismatch, gap,
+                include_visual_data=include_matrix
+            )
+        else:
+            result = needleman_wunsch(
+                seq1, seq2, match, mismatch, gap,
+                include_visual_data=include_matrix
+            )
+
         return jsonify({"mode": mode, "result": result})
+
     except (ValueError, TypeError) as error:
         return jsonify({"error": str(error)}), 400
+
 
 
 @app.post("/api/msa")
