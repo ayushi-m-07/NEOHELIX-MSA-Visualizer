@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -8,20 +9,49 @@
 </head>
 <body>
   <header>
-    <div><div class="eyebrow">BIOINFORMATICS • EDUCATIONAL WORKBENCH</div><h1>NEO<span>HELIX</span></h1><p>Pairwise and multiple sequence alignment</p></div>
+    <div>
+      <div class="eyebrow">BIOINFORMATICS • EDUCATIONAL WORKBENCH</div>
+      <h1>NEO<span>HELIX</span></h1>
+      <p>Pairwise and multiple sequence alignment</p>
+    </div>
     <div class="status"><i></i> ALIGNMENT ENGINE READY</div>
   </header>
+
   <main>
-    <section class="intro"><div><div class="eyebrow">SEQUENCE ANALYSIS PLATFORM</div><h2>Explore sequence relationships.</h2><p>Align two sequences with NW/SW, or compare several sequences using a simple progressive star MSA.</p></div><div class="helix">⌁</div></section>
+    <section class="intro">
+      <div>
+        <div class="eyebrow">SEQUENCE ANALYSIS PLATFORM</div>
+        <h2>Explore sequence relationships.</h2>
+        <p>Align two sequences with NW/SW, or compare several sequences using a simple progressive star MSA.</p>
+      </div>
+      <div class="helix">⌁</div>
+    </section>
 
     <section class="panel">
-      <div class="section-title"><span class="number">01</span><div><h2>Pairwise alignment</h2><p>Needleman–Wunsch global or Smith–Waterman local alignment</p></div></div>
-      <div class="grid two">
-        <label>Sequence 1<textarea id="pair1" rows="3">GTTACATTT</textarea></label>
-        <label>Sequence 2<textarea id="pair2" rows="3">TGTTACA</textarea></label>
+      <div class="section-title">
+        <span class="number">01</span>
+        <div>
+          <h2>Pairwise alignment</h2>
+          <p>Needleman–Wunsch global or Smith–Waterman local alignment</p>
+        </div>
       </div>
+
+      <div class="grid two">
+        <label>Sequence 1
+          <textarea id="pair1" rows="3">GTTACATTT</textarea>
+        </label>
+        <label>Sequence 2
+          <textarea id="pair2" rows="3">TGTTACA</textarea>
+        </label>
+      </div>
+
       <div class="controls">
-        <label>Algorithm<select id="mode"><option value="global">Needleman–Wunsch (global)</option><option value="local">Smith–Waterman (local)</option></select></label>
+        <label>Algorithm
+          <select id="mode">
+            <option value="global">Needleman–Wunsch (global)</option>
+            <option value="local">Smith–Waterman (local)</option>
+          </select>
+        </label>
         <label>Match<input id="match" type="number" value="1"></label>
         <label>Mismatch<input id="mismatch" type="number" value="-1"></label>
         <label>Gap<input id="gap" type="number" value="-2"></label>
@@ -31,15 +61,25 @@
     </section>
 
     <section class="panel">
-      <div class="section-title"><span class="number">02</span><div><h2>Multiple sequence alignment</h2><p>Enter 2–8 DNA sequences in FASTA format or one sequence per line.</p></div></div>
-      <label>FASTA / sequences<textarea id="msaInput" rows="8">>Sequence_1
+      <div class="section-title">
+        <span class="number">02</span>
+        <div>
+          <h2>Multiple sequence alignment</h2>
+          <p>Enter 2–8 DNA sequences in FASTA format or one sequence per line.</p>
+        </div>
+      </div>
+
+      <label>FASTA / sequences
+        <textarea id="msaInput" rows="8">>Sequence_1
 GGGATCGATCGGG
 >Sequence_2
 ATCGATCG
 >Sequence_3
 GGATCGATCG
 >Sequence_4
-ATCGATC</textarea></label>
+ATCGATC</textarea>
+      </label>
+
       <div class="controls compact">
         <label>Match<input id="msaMatch" type="number" value="1"></label>
         <label>Mismatch<input id="msaMismatch" type="number" value="-1"></label>
@@ -50,16 +90,58 @@ ATCGATC</textarea></label>
     </section>
 
     <section class="panel">
-      <div class="section-title"><span class="number">03</span><div><h2>Fetch from NCBI</h2><p>Retrieve one reference nucleotide sequence from NCBI Nucleotide (nuccore). Example: NM_000546.6 (human TP53 mRNA).</p></div></div>
-      <div class="controls ncbi">
-        <label>NCBI nucleotide accession<input id="accession" placeholder="e.g. NM_000546.6"></label>
-        <label>Contact email<input id="email" type="email" placeholder="you@example.com"></label>
-        <button id="ncbiButton">Fetch sequence</button>
+      <div class="section-title">
+        <span class="number">03</span>
+        <div>
+          <h2>Fetch a sequence</h2>
+          <p>Retrieve a nucleotide sequence using a gene symbol, database identifier, or sequence accession.</p>
+        </div>
       </div>
+
+      <div class="controls ncbi">
+        <label>Database
+          <select id="database">
+            <option value="ncbi">NCBI / GenBank</option>
+            <option value="ensembl">Ensembl</option>
+            <option value="ena">European Nucleotide Archive (ENA)</option>
+          </select>
+        </label>
+
+        <label>Gene symbol / ID / accession
+          <input id="identifier" placeholder="e.g. TP53, 7157, NM_000546.6">
+        </label>
+
+        <label>Organism
+          <input id="species" value="Homo sapiens" placeholder="e.g. Homo sapiens">
+        </label>
+
+        <label id="sequenceTypeLabel">Sequence type
+          <select id="sequenceType">
+            <option value="cdna">cDNA (transcript)</option>
+            <option value="cds">CDS (coding sequence)</option>
+            <option value="genomic">Genomic</option>
+          </select>
+        </label>
+
+        <label id="emailLabel">Contact email (NCBI only)
+          <input id="email" type="email" placeholder="you@example.com">
+        </label>
+
+        <button id="fetchButton">Fetch sequence</button>
+      </div>
+
+      <p class="helper" id="fetchHelp">
+        NCBI accepts gene symbols, NCBI Gene IDs, and individual nucleotide accessions. Assembly accessions (GCA_/GCF_) are not individual transcript records.
+      </p>
+
       <div id="ncbiResult" class="result hidden"></div>
     </section>
-    <footer>NEOHELIX • Educational implementation • DNA/RNA input (U is converted to T) • Maximum 8 sequences • NCBI fetch supports nucleotide-record accessions, not SRR run downloads</footer>
+
+    <footer>
+      NEOHELIX • Educational implementation • DNA/RNA input (U is converted to T) • Maximum 8 sequences • Sequence retrieval supports NCBI/GenBank, Ensembl and ENA; ENA currently uses individual sequence accessions
+    </footer>
   </main>
+
   <script src="{{ url_for('static', filename='msa_grid.js') }}"></script>
   <script src="{{ url_for('static', filename='msa_tree.js') }}"></script>
   <script src="{{ url_for('static', filename='app.js') }}"></script>
