@@ -2,14 +2,9 @@
 
 import os
 import re
-import json
-import urllib.parse
-import urllib.request
-import urllib.error
 
 from flask import Flask, jsonify, render_template, request
-from Bio import Entrez, SeqIO
-from io import StringIO
+from Bio import Entrez
 
 from backend import (
     alignment_analysis,
@@ -69,66 +64,6 @@ def parse_sequences(text):
     if len(records) > 8:
         raise ValueError("This demo supports up to 8 sequences.")
     return records
-
-
-def http_get(url, accept="application/json"):
-    """Small standard-library HTTP helper for public database APIs."""
-    req = urllib.request.Request(
-        url,
-        headers={
-            "Accept": accept,
-            "User-Agent": "NEOHELIX-MSA-Visualizer/1.0 (educational sequence retrieval)"
-        },
-    )
-    # Public APIs can briefly return 429/5xx responses. Retry a few times
-    # before reporting a temporary service problem to the user.
-    for attempt in range(3):
-        try:
-            with urllib.request.urlopen(req, timeout=25) as response:
-                return response.read().decode("utf-8")
-        except urllib.error.HTTPError as error:
-            detail = error.read().decode("utf-8", errors="replace")[:300]
-            if error.code == 404:
-                raise ValueError("No matching record was found in that database.") from error
-            if error.code in {429, 500, 502, 503, 504} and attempt < 2:
-                import time
-                time.sleep(attempt + 1)
-                continue
-            if error.code in {429, 500, 502, 503, 504}:
-                raise ValueError(
-                    f"The database service is temporarily unavailable (HTTP {error.code}). "
-                    "Please try again in a few minutes."
-                ) from error
-            raise ValueError(f"Database request failed (HTTP {error.code}): {detail}") from error
-        except (urllib.error.URLError, TimeoutError) as error:
-            if attempt < 2:
-                import time
-                time.sleep(attempt + 1)
-                continue
-            raise ValueError(
-                "Could not reach the database service after several attempts. "
-                "Please try again shortly."
-            ) from error
-
-
-def species_to_ensembl(species):
-    """Convert common species labels to Ensembl's lowercase underscore format."""
-    value = (species or "Homo sapiens").strip().lower()
-    aliases = {
-        "human": "homo_sapiens",
-        "homo sapiens": "homo_sapiens",
-        "mouse": "mus_musculus",
-        "mus musculus": "mus_musculus",
-        "rat": "rattus_norvegicus",
-        "rattus norvegicus": "rattus_norvegicus",
-        "zebrafish": "danio_rerio",
-        "danio rerio": "danio_rerio",
-        "fruit fly": "drosophila_melanogaster",
-        "drosophila melanogaster": "drosophila_melanogaster",
-        "yeast": "saccharomyces_cerevisiae",
-        "saccharomyces cerevisiae": "saccharomyces_cerevisiae",
-    }
-    return aliases.get(value, re.sub(r"\s+", "_", value))
 
 
 def make_result(accession, description, raw_sequence, source):
@@ -221,114 +156,6 @@ def fetch_ncbi(user_input, email, species):
     )
 
 
-def fetch_ensembl(user_input, species, sequence_type):
-    """Resolve an Ensembl gene/transcript and retrieve its nucleotide sequence."""
-    ensembl_species = species_to_ensembl(species)
-    encoded_species = urllib.parse.quote(ensembl_species, safe="_")
-    encoded_input = urllib.parse.quote(user_input, safe="")
-
-    if re.match(r"^ENST\d+(?:\.\d+)?$", user_input, re.IGNORECASE):
-        transcript_id = user_input
-        description = f"Ensembl transcript {transcript_id}"
-    elif re.match(r"^ENSG\d+(?:\.\d+)?$", user_input, re.IGNORECASE):
-        lookup_url = (
-            f"https://rest.ensembl.org/lookup/id/{encoded_input}"
-            "?expand=1;content-type=application/json"
-        )
-        lookup = json.loads(http_get(lookup_url))
-        if lookup.get("species") and lookup["species"].lower() != ensembl_species:
-            raise ValueError(
-                f"This Ensembl ID belongs to {lookup['species']}, not {species}."
-            )
-        transcript_id = lookup.get("canonical_transcript")
-        if not transcript_id:
-            raise ValueError(
-                "Ensembl found the gene, but did not provide a canonical transcript."
-            )
-        description = (
-            f"{lookup.get('display_name', user_input)} — "
-            f"{lookup.get('description', 'Ensembl gene')}"
-        )
-    else:
-        lookup_url = (
-            f"https://rest.ensembl.org/lookup/symbol/{encoded_species}/"
-            f"{encoded_input}?expand=1;content-type=application/json"
-        )
-        lookup = json.loads(http_get(lookup_url))
-        if lookup.get("object_type") != "Gene":
-            raise ValueError(
-                "The Ensembl symbol did not resolve to a gene. "
-                "Try an ENSG or ENST identifier."
-            )
-        transcript_id = lookup.get("canonical_transcript")
-        if not transcript_id:
-            raise ValueError(
-                "Ensembl found the gene, but did not provide a canonical transcript."
-            )
-        description = (
-            f"{lookup.get('display_name', user_input)} — "
-            f"{lookup.get('description', 'Ensembl gene')}"
-        )
-
-    allowed_types = {"cdna", "cds", "genomic"}
-    if sequence_type not in allowed_types:
-        raise ValueError("Choose cDNA, CDS, or genomic sequence type.")
-
-    # Ensembl lookup responses can return versioned transcript IDs (e.g. ENST... .9).
-    # Try the returned ID first; if the sequence endpoint rejects it, retry the stable ID.
-    sequence_ids = [transcript_id]
-    unversioned_id = re.sub(r"\.\d+$", "", transcript_id)
-    if unversioned_id != transcript_id:
-        sequence_ids.append(unversioned_id)
-
-    last_error = None
-    for sequence_id in sequence_ids:
-        sequence_url = (
-            "https://rest.ensembl.org/sequence/id/"
-            f"{urllib.parse.quote(sequence_id, safe='')}"
-            f"?type={sequence_type};content-type=text/plain"
-        )
-        try:
-            sequence = http_get(sequence_url, accept="text/plain").strip()
-            return make_result(
-                transcript_id,
-                description + f" ({sequence_type})",
-                sequence,
-                "Ensembl",
-            )
-        except ValueError as error:
-            last_error = error
-            if "No matching record" not in str(error):
-                raise
-
-    raise last_error or ValueError("Ensembl could not retrieve this sequence.")
-
-
-def fetch_ena(user_input):
-    """Retrieve a nucleotide sequence by an ENA sequence accession."""
-    user_input = user_input.upper()
-    if not re.match(r"^[A-Z]{1,6}_?\d{5,}(?:\.\d+)?$", user_input, re.IGNORECASE):
-        raise ValueError(
-            "ENA retrieval currently expects an individual sequence accession. "
-            "Use a sequence accession, not a gene symbol or genome assembly accession."
-        )
-    url = (
-        "https://www.ebi.ac.uk/ena/browser/api/fasta/"
-        + urllib.parse.quote(user_input, safe=".")
-    )
-    fasta_text = http_get(url, accept="text/x-fasta")
-    records = list(SeqIO.parse(StringIO(fasta_text), "fasta"))
-    if not records:
-        raise ValueError("ENA returned no FASTA sequence for that accession.")
-    record = records[0]
-    return make_result(
-        record.id,
-        record.description,
-        str(record.seq),
-        "ENA",
-    )
-
-
 @app.get("/")
 def home():
     return render_template("index.html")
@@ -391,22 +218,13 @@ def fetch_sequence():
     try:
         data = request.get_json(force=True)
         user_input = str(data.get("identifier", "")).strip()
-        source = str(data.get("source", "ncbi")).lower()
         email = str(data.get("email", "")).strip()
         species = str(data.get("species", "Homo sapiens")).strip()
-        sequence_type = str(data.get("sequence_type", "cdna")).lower()
 
         if not user_input:
             raise ValueError("Enter a gene symbol, database ID, or sequence accession.")
 
-        if source in {"ncbi", "genbank"}:
-            result = fetch_ncbi(user_input, email, species)
-        elif source == "ensembl":
-            result = fetch_ensembl(user_input, species, sequence_type)
-        elif source == "ena":
-            result = fetch_ena(user_input)
-        else:
-            raise ValueError("Choose NCBI / GenBank, Ensembl, or ENA.")
+        result = fetch_ncbi(user_input, email, species)
 
         return jsonify(result)
     except Exception as error:
