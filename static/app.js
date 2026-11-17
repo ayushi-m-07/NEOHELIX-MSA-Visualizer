@@ -9,17 +9,38 @@ function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, (char) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
 }
 
+
 function showAlignment(target, title, result) {
   target.classList.remove("hidden");
+
   const a = result.aligned_seq1;
   const b = result.aligned_seq2;
+
   let markers = "";
-  for (let i = 0; i < a.length; i++) markers += a[i] === b[i] ? "|" : " ";
-  let html = `<h3>${escapeHtml(title)}</h3><div class="stats"><div class="stat"><b>${result.score}</b>Alignment score</div><div class="stat"><b>${a.length}</b>Alignment columns</div></div>`;
-  html += `<div class="mono">${escapeHtml(a)}\n<span class="matchline">${escapeHtml(markers)}</span>\n${escapeHtml(b)}</div>`;
-  html += `<h3 style="margin-top:18px">Dynamic-programming score matrix</h3>${matrixTable(result.matrix, result.path)}`;
+  for (let i = 0; i < a.length; i++) {
+    markers += a[i] === b[i] ? "|" : " ";
+  }
+
+  let html = `<h3>${escapeHtml(title)}</h3>
+    <div class="stats">
+      <div class="stat"><b>${result.score}</b>Alignment score</div>
+      <div class="stat"><b>${a.length}</b>Alignment columns</div>
+    </div>`;
+
+  html += `<div class="mono">${escapeHtml(a)}
+<span class="matchline">${escapeHtml(markers)}</span>
+${escapeHtml(b)}</div>`;
+
+  if (result.matrix && result.path) {
+    html += `<h3 style="margin-top:18px">Dynamic-programming score matrix</h3>`;
+    html += matrixTable(result.matrix, result.path);
+  } else {
+    html += `<p class="muted">The alignment matrix is hidden for sequences longer than 50 bases to reduce response size.</p>`;
+  }
+
   target.innerHTML = html;
 }
+
 
 function matrixTable(matrix, path) {
   const pathKeys = new Set(path.map(([i,j]) => `${i},${j}`));
