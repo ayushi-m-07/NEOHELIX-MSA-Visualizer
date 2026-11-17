@@ -15,19 +15,25 @@ from backend import (
 )
 
 app = Flask(__name__)
-DNA_LETTERS = set("ACGTUN")
-
+DNA_LETTERS = set("ACGTRYSWKMBDHVN")
 
 def clean_sequence(sequence):
-    """Remove whitespace and validate a DNA/RNA sequence."""
-    cleaned = re.sub(r"\s+", "", sequence).upper()
-    if not cleaned:
-        raise ValueError("A sequence cannot be empty.")
-    invalid = sorted(set(cleaned) - DNA_LETTERS)
-    if invalid:
-        raise ValueError("Invalid DNA/RNA character(s): " + ", ".join(invalid))
-    return cleaned.replace("U", "T")
+    """Clean and validate a DNA/RNA sequence."""
 
+    cleaned = re.sub(r"\s+", "", sequence).upper()
+
+    if not cleaned:
+        raise ValueError("Sequence cannot be empty.")
+
+    invalid = set(cleaned) - DNA_LETTERS - {"U"}
+
+    if invalid:
+        raise ValueError(
+            f"Invalid nucleotide characters: {', '.join(sorted(invalid))}"
+        )
+
+    # Normalize RNA uracil to DNA thymine
+    return cleaned.replace("U", "T")
 
 def parse_sequences(text):
     """Read FASTA text or one sequence per line."""
@@ -112,58 +118,157 @@ def msa():
         return jsonify({"error": str(error)}), 400
 
 
+
+
 @app.post("/api/ncbi")
 def ncbi_fetch():
     try:
         data = request.get_json(force=True)
-        accession = data.get("accession", "").strip()
+
+        user_input = data.get("accession", "").strip()
         email = data.get("email", "").strip()
-        if not accession:
-            raise ValueError("Enter an NCBI nucleotide accession number.")
+
+        if not user_input:
+            raise ValueError(
+                "Enter an NCBI Gene ID, gene symbol, or nucleotide accession."
+            )
+
         if not email or "@" not in email:
             raise ValueError("Enter a valid contact email for NCBI Entrez.")
 
-        accession = accession.strip()
-        # SRR/ERR/DRR identifiers refer to sequencing runs in the SRA.
-        # They are not nucleotide records in the nuccore database and can
-        # represent very large read datasets that need SRA-specific tools.
-        if re.match(r"^(SRR|ERR|DRR)\d+$", accession, re.IGNORECASE):
-            raise ValueError(
-                "This is an SRA run accession, not a nucleotide-record accession. "
-                "The current NEOHELIX fetcher retrieves reference sequences from "
-                "NCBI Nucleotide (nuccore). Try a nucleotide accession such as "
-                "NM_000546.6 (human TP53 mRNA). Full SRR run reads require an "
-                "SRA-specific download workflow and may be very large."
-            )
-
         Entrez.email = email
         Entrez.tool = "NEOHELIX_MSA_Visualizer"
-        with Entrez.efetch(db="nuccore", id=accession, rettype="fasta", retmode="text") as handle:
-            fasta_text = handle.read()
 
-        # NCBI may include comment lines in FASTA responses. The fasta-blast
-        # parser ignores lines beginning with #, !, or ; before the header.
-        records = list(SeqIO.parse(StringIO(fasta_text), "fasta-blast"))
-        if not records:
+        # Reject SRA run identifiers
+        if re.match(r"^(SRR|ERR|DRR)\d+$", user_input, re.IGNORECASE):
             raise ValueError(
-                "NCBI returned no nucleotide FASTA record. Check that the accession "
-                "belongs to the Nucleotide database (not SRA) and try again."
+                "SRA run IDs are not supported. Please enter a gene ID, "
+                "gene symbol, or nucleotide accession instead."
             )
-        if len(records) > 1:
-            raise ValueError("Enter one accession at a time; NCBI returned multiple records.")
+
+        # Reject protein accessions
+        if re.match(r"^(NP_|XP_|YP_|WP_)", user_input, re.IGNORECASE):
+            raise ValueError(
+                "Protein accessions are not supported. "
+                "NEOHELIX currently retrieves nucleotide sequences only."
+            )
+
+        gene_id = None
+        nucleotide_id = None
+
+        # CASE 1: Numeric Gene ID, e.g. 672 or 672 - BRCA1
+        gene_match = re.match(
+            r"^\s*(\d+)(?:\s*[-—]\s*.*)?$",
+            user_input
+        )
+
+        if gene_match:
+            gene_id = gene_match.group(1)
+
+        # CASE 2: Nucleotide accession, e.g. NM_007294.4
+        elif re.match(
+            r"^(?:[A-Z]{1,6}_?\d{5,}|[A-Z]\d{5,})(?:\.\d+)?$",
+            user_input,
+            re.IGNORECASE
+        ):
+            nucleotide_id = user_input
+
+        # CASE 3: Gene symbol, e.g. BRCA1
+        else:
+            with Entrez.esearch(
+                db="gene",
+                term=f'{user_input}[Gene Name] AND "Homo sapiens"[Organism]',
+                retmax=3
+            ) as handle:
+                gene_results = Entrez.read(handle)
+
+            gene_ids = gene_results["IdList"]
+
+            if not gene_ids:
+                raise ValueError(
+                    f"No human gene found for '{user_input}'. "
+                    "Check the gene symbol or Gene ID."
+                )
+
+            if len(gene_ids) > 1:
+                raise ValueError(
+                    f"Multiple human genes matched '{user_input}'. "
+                    "Please enter the specific NCBI Gene ID."
+                )
+
+            gene_id = gene_ids[0]
+
+        # Resolve Gene ID to a RefSeq mRNA record
+        if gene_id is not None:
+            search_term = (
+                f"{gene_id}[GeneID] AND biomol_mrna[PROP] "
+                f"AND srcdb_refseq[PROP] AND Homo sapiens[Organism]"
+            )
+
+            with Entrez.esearch(
+                db="nuccore",
+                term=search_term,
+                retmax=20
+            ) as handle:
+                nucleotide_results = Entrez.read(handle)
+
+            nucleotide_ids = nucleotide_results["IdList"]
+
+            if not nucleotide_ids:
+                raise ValueError(
+                    f"No human RefSeq mRNA nucleotide records found "
+                    f"for Gene ID {gene_id}."
+                )
+
+            # Use the first matching RefSeq mRNA record
+            nucleotide_id = nucleotide_ids[0]
+
+        # Retrieve GenBank XML rather than decoding FASTA text
+        with Entrez.efetch(
+            db="nuccore",
+            id=nucleotide_id,
+            rettype="gb",
+            retmode="xml"
+        ) as handle:
+            records = Entrez.read(handle)
+
+        if not records:
+            raise ValueError("NCBI returned no nucleotide record.")
 
         record = records[0]
-        sequence = clean_sequence(str(record.seq))
+
+        # Extract sequence and metadata from GenBank XML
+       
+        raw_sequence = record["GBSeq_sequence"]
+        sequence = clean_sequence(raw_sequence)
+
+        resolved_accession = record["GBSeq_accession-version"]
+        description = record["GBSeq_definition"]
+
+        # Maintain the existing NEOHELIX sequence length limit
         if len(sequence) > 100000:
             raise ValueError(
-                "This record is longer than the demo's 100,000-base limit. "
-                "Choose a shorter nucleotide record for the classroom demonstration."
+                "This record is longer than the demo's "
+                "100,000-base limit. Choose a shorter nucleotide record."
             )
-        return jsonify({"accession": accession, "description": record.description,
-                        "sequence": sequence, "length": len(sequence),
-                        "fasta": ">" + record.description + "\n" + sequence + "\n"})
+
+        # Keep the same response structure expected by app.js
+        return jsonify({
+            "accession": resolved_accession,
+            "description": description,
+            "sequence": sequence,
+            "length": len(sequence),
+            "fasta": (
+                ">" + resolved_accession + " " + description
+                + "\n" + sequence + "\n"
+            )
+        })
+
     except Exception as error:
-        return jsonify({"error": "NCBI retrieval failed: " + str(error)}), 400
+        return jsonify({
+            "error": "NCBI retrieval failed: " + str(error)
+        }), 400
+
 
 
 if __name__ == "__main__":
