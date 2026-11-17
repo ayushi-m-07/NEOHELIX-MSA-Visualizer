@@ -7,7 +7,7 @@ progressive star alignment. It is not a replacement for production MSA tools.
 import numpy as np
 
 
-def needleman_wunsch(seq1, seq2, match=1, mismatch=-1, gap=-2):
+def needleman_wunsch(seq1, seq2, match=1, mismatch=-1, gap=-2, include_visual_data=True):
     """Return a global alignment of two complete sequences."""
     rows = len(seq1) + 1
     cols = len(seq2) + 1
@@ -55,16 +55,20 @@ def needleman_wunsch(seq1, seq2, match=1, mismatch=-1, gap=-2):
             j -= 1
         path.append((i, j))
 
-    return {
+        result = {
         "score": int(matrix[-1][-1]),
         "aligned_seq1": aligned1,
         "aligned_seq2": aligned2,
-        "matrix": matrix.tolist(),
-        "path": list(reversed(path)),
     }
 
+    if include_visual_data:
+        result["matrix"] = matrix.tolist()
+        result["path"] = list(reversed(path))
 
-def smith_waterman(seq1, seq2, match=1, mismatch=-1, gap=-2):
+    return result
+
+
+def smith_waterman(seq1, seq2, match=1, mismatch=-1, gap=-2, include_visual_data=True):
     """Return the highest-scoring local alignment between two sequences."""
     rows = len(seq1) + 1
     cols = len(seq2) + 1
@@ -108,15 +112,19 @@ def smith_waterman(seq1, seq2, match=1, mismatch=-1, gap=-2):
             j -= 1
         path.append((i, j))
 
-    return {
+        result = {
         "score": int(best_score),
         "aligned_seq1": aligned1,
         "aligned_seq2": aligned2,
         "start1": i, "end1": end_i,
         "start2": j, "end2": end_j,
-        "matrix": matrix.tolist(),
-        "path": list(reversed(path)),
     }
+
+    if include_visual_data:
+        result["matrix"] = matrix.tolist()
+        result["path"] = list(reversed(path))
+
+    return result
 
 
 def _alignment_slots(aligned_center, aligned_other):
