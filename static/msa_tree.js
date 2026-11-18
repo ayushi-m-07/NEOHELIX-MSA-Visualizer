@@ -43,7 +43,14 @@
   .mt-error {
     color: #ff8a8a;
     font: 13px Inter, system-ui, sans-serif;
-  }`;
+  }
+  .mt-grid { stroke: var(--line, #24404e); stroke-dasharray: 3 4; }
+  .mt-leaf { fill: var(--cyan, #4ce4ed); }
+  .mt-node { fill: var(--panel, #0e1c27); stroke: var(--cyan, #4ce4ed); stroke-width: 2; cursor: help; }
+  .mt-node:hover { fill: var(--cyan, #4ce4ed); }
+  .mt-len { fill: var(--muted, #8da6b2); font: 10px Inter, system-ui, sans-serif; }
+  .mt-pct { fill: var(--green, #91f2c0); font: 10px Inter, system-ui, sans-serif; }
+  .mt-sub { fill: var(--muted, #8da6b2); font: 10px ui-monospace, SFMono-Regular, monospace; }`;
 
   function addStyle() {
     if (document.getElementById("msa-tree-styles")) return;
@@ -160,6 +167,19 @@
 
     const names = rows.map((row, i) => row.name || `Sequence ${i + 1}`);
     const root = buildUPGMA(names, identity);
+        // Summary of pairwise similarity
+    let closest = { v: -1, i: 0, j: 1 };
+    let farthest = { v: Infinity, i: 0, j: 1 };
+    let total = 0, pairs = 0;
+    for (let i = 0; i < names.length; i++) {
+      for (let j = i + 1; j < names.length; j++) {
+        const v = Number(identity[i][j]);
+        total += v; pairs++;
+        if (v > closest.v) closest = { v, i, j };
+        if (v < farthest.v) farthest = { v, i, j };
+      }
+    }
+    const meanIdentity = pairs ? total / pairs : 0;
 
     const width = Math.max(520, names.length * 110 + 180);
     const height = Math.max(180, names.length * 58 + 50);
@@ -200,12 +220,23 @@
 
     let branches = "";
     let labels = "";
+    let lengths = "";
+    let nodes = "";
+    let grid = "";
+    function leavesOf(node) {
+      if (!node.left && !node.right) return [node.name];
+      return leavesOf(node.left).concat(leavesOf(node.right));
+    }
 
     function draw(node) {
       const p = positions.get(node.id);
 
       if (!node.left && !node.right) {
-        labels += `<text class="mt-label" x="${p.x + 9}" y="${p.y + 4}">${escapeText(node.name)}</text>`;
+        const info = rows[node.id] && rows[node.id].stats;
+        const sub = info ? `${info.length} bp · GC ${info.gc_percent}%` : "";
+        nodes += `<circle class="mt-leaf" cx="${p.x}" cy="${p.y}" r="4"><title>${escapeText(node.name)}${sub ? " - " + escapeText(sub) : ""}</title></circle>`;
+        labels += `<text class="mt-label" x="${p.x + 12}" y="${p.y + 4}">${escapeText(node.name)}</text>`;
+        if (sub) labels += `<text class="mt-sub" x="${p.x + 12}" y="${p.y + 18}">${escapeText(sub)}</text>`;
         return;
       }
 
@@ -216,6 +247,22 @@
         <path class="mt-branch"
           d="M ${p.x} ${l.y} H ${l.x} M ${p.x} ${r.y} H ${r.x} M ${p.x} ${l.y} V ${r.y}" />
       `;
+
+      // Branch-length labels (only where there is room)
+      [[node.leftLength, l], [node.rightLength, r]].forEach(([len, pos]) => {
+        if (len > 0 && pos.x - p.x > 40) {
+          lengths += `<text class="mt-len" x="${(p.x + pos.x) / 2}" y="${pos.y - 5}" text-anchor="middle">${len.toFixed(2)}</text>`;
+        }
+      });
+
+      // Identity at this merge: distance = 1 - identity, and height = distance / 2
+      const identityPct = ((1 - 2 * node.height) * 100).toFixed(1);
+      if (Math.min(l.x, r.x) - p.x > 56) {
+        lengths += `<text class="mt-pct" x="${p.x + 8}" y="${p.y - 7}">${identityPct}%</text>`;
+      }
+
+      const members = leavesOf(node);
+      nodes += `<circle class="mt-node" cx="${p.x}" cy="${p.y}" r="5"><title>Cluster of ${members.length}: ${escapeText(members.join(", "))}\nAverage identity between its two branches: ${identityPct}%</title></circle>`;
 
       draw(node.left);
       draw(node.right);
@@ -235,6 +282,7 @@
     for (let i = 0; i <= 4; i++) {
       const x = left + (plotWidth * i / 4);
       const distance = maxDistance * (1 - i / 4);
+      grid += `<line class="mt-grid" x1="${x}" y1="${top - 10}" x2="${x}" y2="${bottom + 8}" />`;
 
       axis += `
         <line x1="${x}" y1="${bottom + 8}"
@@ -249,13 +297,21 @@
       <div class="mt-wrap">
         <h3>UPGMA Guide Tree</h3>
         <div class="mt-subtitle">
-          Clustered using pairwise sequence identity. Horizontal scale represents distance.
+         Pairwise distance = 1 − identity. The scale shows height above the leaves (half the distance between the clusters being joined). Numbers on branches are branch lengths. Hover a node to see its cluster members and average identity.
         </div>
+        <div class="stats">
+          <div class="stat"><b>${closest.v.toFixed(1)}%</b>Closest pair: ${escapeText(names[closest.i])} &amp; ${escapeText(names[closest.j])}</div>
+          <div class="stat"><b>${farthest.v.toFixed(1)}%</b>Most divergent: ${escapeText(names[farthest.i])} &amp; ${escapeText(names[farthest.j])}</div>
+          <div class="stat"><b>${meanIdentity.toFixed(1)}%</b>Mean pairwise identity</div>
+        </div>        
         <svg class="mt-svg"
              viewBox="0 0 ${width} ${height}"
              role="img"
              aria-label="UPGMA sequence similarity tree">
+          ${grid}
           ${branches}
+          ${lengths}
+          ${nodes}
           ${labels}
           ${axis}
         </svg>
