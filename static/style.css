@@ -465,3 +465,33 @@ footer {
   border-radius:7px;
   font-size:13px;
 }
+
+/* CUSTOM DARK SCROLLBARS */
+
+/* Chrome, Edge, Safari */
+::-webkit-scrollbar {
+    width: 9px;
+    height: 9px;
+}
+
+::-webkit-scrollbar-track {
+    background: #071018;
+    border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #24404e;
+    border: 2px solid #071018;
+    border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #4ce4ed;
+}
+
+/* Firefox */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: #24404e #071018;
+}
+
