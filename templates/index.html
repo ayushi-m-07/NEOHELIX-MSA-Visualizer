@@ -50,15 +50,16 @@ ATCGATC</textarea></label>
     </section>
 
     <section class="panel">
-            <div class="section-title"><span class="number">03</span><div><h2>Fetch from NCBI</h2><p>Retrieve one reference nucleotide sequence from NCBI by Gene ID, gene symbol or nucleotide accession. Example: TP53, 7157 or NM_000546.6 (human TP53 mRNA).</p></div></div>
-     <div class="controls ncbi">
-                <label>NCBI Gene ID / Gene symbol / Accession<input id="accession" placeholder="e.g. TP53, 7157 or NM_000546.6"></label>
+      <div class="section-title"><span class="number">03</span><div><h2>Fetch from NCBI</h2><p>Retrieve one reference nucleotide sequence from NCBI by Gene ID, gene symbol or nucleotide accession. Example: TP53, 7157 or NM_000546.6 (human TP53 mRNA).</p></div></div>
+      <div class="controls ncbi">
+        <label>NCBI Gene ID / Gene symbol / Accession<input id="accession" placeholder="e.g. TP53, 7157 or NM_000546.6"></label>
+        <label>Organism (optional)<input id="organism" list="organismList" autocomplete="off" placeholder="Homo sapiens"><datalist id="organismList"></datalist></label>
         <label>Contact email<input id="email" type="email" placeholder="you@example.com"></label>
         <button id="ncbiButton">Fetch sequence</button>
       </div>
       <div id="ncbiResult" class="result hidden"></div>
     </section>
-        <footer>NEOHELIX • Educational implementation • DNA/RNA input (U is converted to T) • Maximum 8 sequences • NCBI fetch supports Gene ID, gene symbol and nucleotide accessions, not SRR run downloads</footer>
+    <footer>NEOHELIX • Educational implementation • DNA/RNA input (U is converted to T) • Maximum 8 sequences • NCBI fetch supports Gene ID, gene symbol and nucleotide accessions, not SRR run downloads</footer>
   </main>
   <script src="{{ url_for('static', filename='msa_grid.js') }}"></script>
   <script src="{{ url_for('static', filename='msa_tree.js') }}"></script>
