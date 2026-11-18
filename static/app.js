@@ -160,28 +160,108 @@ byId("ncbiButton").addEventListener("click", async () => {
 });
 
 // Organism type-ahead for the NCBI fetch box (NCBI fetch only)
+// Custom dropdown (the browser's native datalist is unreliable)
 (() => {
   const input = byId("organism");
-  const list = byId("organismList");
-  if (!input || !list) return;
+  if (!input) return;
+  input.removeAttribute("list");
+  input.setAttribute("autocomplete", "off");
+
+  const COMMON = [
+    ["Homo sapiens","human"],["Mus musculus","house mouse"],["Rattus norvegicus","Norway rat"],
+    ["Danio rerio","zebrafish"],["Drosophila melanogaster","fruit fly"],["Caenorhabditis elegans","nematode"],
+    ["Saccharomyces cerevisiae","baker's yeast"],["Schizosaccharomyces pombe","fission yeast"],
+    ["Escherichia coli","E. coli"],["Bacillus subtilis",""],["Arabidopsis thaliana","thale cress"],
+    ["Oryza sativa","rice"],["Zea mays","maize"],["Gallus gallus","chicken"],["Bos taurus","cattle"],
+    ["Sus scrofa","pig"],["Canis lupus familiaris","dog"],["Macaca mulatta","rhesus macaque"],
+    ["Pan troglodytes","chimpanzee"],["Xenopus laevis","African clawed frog"]
+  ].map(([name, common]) => ({ name, common }));
+
+  const wrap = input.parentElement;
+  wrap.style.position = "relative";
+  const menu = document.createElement("div");
+  menu.style.cssText = "display:none;position:absolute;left:0;right:0;top:100%;margin-top:4px;z-index:50;max-height:240px;overflow-y:auto;background:#0e1c27;border:1px solid #4ce4ed;border-radius:7px;box-shadow:0 10px 30px #000a;";
+  wrap.appendChild(menu);
+
+  let items = [];
+  let active = -1;
+  const cache = new Map();
   let timer = null;
-  input.addEventListener("input", () => {
+  let controller = null;
+
+  function close() { menu.style.display = "none"; active = -1; }
+  function choose(name) { input.value = name; close(); }
+  function highlight() {
+    Array.from(menu.children).forEach((el, k) => {
+      el.style.background = k === active ? "#1d3a4a" : "transparent";
+    });
+    if (active >= 0 && menu.children[active]) menu.children[active].scrollIntoView({ block: "nearest" });
+  }
+
+  function render(list) {
+    const seen = new Set();
+    items = list.filter((o) => !seen.has(o.name) && seen.add(o.name)).slice(0, 12);
+    menu.innerHTML = "";
+    active = -1;
+    if (!items.length) { close(); return; }
+    items.forEach((o) => {
+      const row = document.createElement("div");
+      row.style.cssText = "padding:8px 11px;cursor:pointer;font:13px/1.4 ui-monospace,SFMono-Regular,monospace;color:#e7f1f5;";
+      row.textContent = o.name;
+      if (o.common) {
+        const c = document.createElement("span");
+        c.textContent = "  " + o.common;
+        c.style.cssText = "color:#8da6b2;font-size:12px;";
+        row.appendChild(c);
+      }
+      row.addEventListener("mousedown", (e) => { e.preventDefault(); choose(o.name); });
+      row.addEventListener("mouseenter", () => { active = items.indexOf(o); highlight(); });
+      menu.appendChild(row);
+    });
+    menu.style.display = "block";
+  }
+
+  function localMatches(q) {
+    const t = q.toLowerCase();
+    return COMMON.filter((o) => !t || o.name.toLowerCase().includes(t) || o.common.toLowerCase().includes(t));
+  }
+
+  function update() {
     clearTimeout(timer);
+    if (controller) controller.abort();
     const q = input.value.trim();
-    if (q.length < 3) { list.innerHTML = ""; return; }
+    const local = localMatches(q);
+    render(local);
+    if (q.length < 3) return;
+
+    const key = q.toLowerCase();
+    if (cache.has(key)) { render(local.concat(cache.get(key))); return; }
+
     timer = setTimeout(async () => {
+      controller = new AbortController();
       try {
         const email = encodeURIComponent(byId("email").value.trim());
-        const response = await fetch(`/api/organisms?q=${encodeURIComponent(q)}&email=${email}`);
+        const response = await fetch(`/api/organisms?q=${encodeURIComponent(q)}&email=${email}`, { signal: controller.signal });
         const data = await response.json();
-        list.innerHTML = "";
-        (data.organisms || []).forEach((o) => {
-          const option = document.createElement("option");
-          option.value = o.name;
-          if (o.common) option.label = `${o.name} (${o.common})`;
-          list.appendChild(option);
-        });
-      } catch (error) { /* suggestions are optional */ }
-    }, 400);
+        const live = data.organisms || [];
+        if (live.length) cache.set(key, live);
+        if (input.value.trim() === q && document.activeElement === input) render(local.concat(live));
+      } catch (error) { /* suggestions are optional / request cancelled */ }
+    }, 250);
+  }
+
+  input.addEventListener("input", update);
+  input.addEventListener("focus", update);
+  input.addEventListener("click", () => { if (menu.style.display === "none") update(); });
+  input.addEventListener("blur", close);
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowDown") {
+      if (menu.style.display === "none") { update(); } else { active = Math.min(active + 1, items.length - 1); highlight(); }
+      e.preventDefault();
+    } else if (e.key === "ArrowUp") {
+      active = Math.max(active - 1, 0); highlight(); e.preventDefault();
+    } else if (e.key === "Enter" && active >= 0 && menu.style.display !== "none") {
+      choose(items[active].name); e.preventDefault();
+    } else if (e.key === "Escape") { close(); }
   });
 })();
