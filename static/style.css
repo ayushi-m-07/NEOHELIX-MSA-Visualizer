@@ -465,3 +465,37 @@ footer {
   border-radius:7px;
   font-size:13px;
 }
+
+
+/* GLOBAL CUSTOM SCROLLBARS */
+
+/* Chrome, Edge and Safari */
+::-webkit-scrollbar {
+    width: 9px;
+    height: 9px;
+}
+
+::-webkit-scrollbar-track {
+    background: #0b1720;
+    border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #24404e;
+    border: 2px solid #0b1720;
+    border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #4ce4ed;
+}
+
+::-webkit-scrollbar-corner {
+    background: #0b1720;
+}
+
+/* Firefox */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: #24404e #0b1720;
+}
