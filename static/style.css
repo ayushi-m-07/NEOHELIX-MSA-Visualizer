@@ -357,3 +357,25 @@ footer {
         grid-template-columns: 90px minmax(300px, 1fr);
     }
 }
+.error{
+  margin:0;
+  padding:12px 14px;
+  color:var(--red);
+  background:rgba(255,157,157,.08);
+  border:1px solid rgba(255,157,157,.45);
+  border-left:4px solid var(--red);
+  border-radius:7px;
+  font-size:13px;
+  line-height:1.5;
+}
+.error::before{content:"⚠ ";}
+.notice{
+  margin:12px 0 0;
+  padding:10px 14px;
+  color:var(--green);
+  background:rgba(145,242,192,.08);
+  border:1px solid rgba(145,242,192,.4);
+  border-left:4px solid var(--green);
+  border-radius:7px;
+  font-size:13px;
+}
