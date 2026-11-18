@@ -149,7 +149,7 @@ byId("ncbiButton").addEventListener("click", async () => {
   const target = byId("ncbiResult");
   button.disabled = true;
   try {
-    const response = await fetch("/api/ncbi", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({accession:byId("accession").value,email:byId("email").value})});
+    const response = await fetch("/api/ncbi", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({accession:byId("accession").value,email:byId("email").value,organism:byId("organism").value})});
     const data = await response.json();
     if (!response.ok) throw new Error(data.error);
     target.classList.remove("hidden");
@@ -158,3 +158,30 @@ byId("ncbiButton").addEventListener("click", async () => {
   } catch (error) { showError(target, error.message); }
   finally { button.disabled = false; }
 });
+
+// Organism type-ahead for the NCBI fetch box (NCBI fetch only)
+(() => {
+  const input = byId("organism");
+  const list = byId("organismList");
+  if (!input || !list) return;
+  let timer = null;
+  input.addEventListener("input", () => {
+    clearTimeout(timer);
+    const q = input.value.trim();
+    if (q.length < 3) { list.innerHTML = ""; return; }
+    timer = setTimeout(async () => {
+      try {
+        const email = encodeURIComponent(byId("email").value.trim());
+        const response = await fetch(`/api/organisms?q=${encodeURIComponent(q)}&email=${email}`);
+        const data = await response.json();
+        list.innerHTML = "";
+        (data.organisms || []).forEach((o) => {
+          const option = document.createElement("option");
+          option.value = o.name;
+          if (o.common) option.label = `${o.name} (${o.common})`;
+          list.appendChild(option);
+        });
+      } catch (error) { /* suggestions are optional */ }
+    }, 400);
+  });
+})();
