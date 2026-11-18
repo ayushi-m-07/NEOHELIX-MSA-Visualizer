@@ -127,6 +127,7 @@ def ncbi_fetch():
 
         user_input = data.get("accession", "").strip()
         email = data.get("email", "").strip()
+        organism = data.get("organism", "").strip() or "Homo sapiens"
 
         if not user_input:
             raise ValueError(
@@ -177,7 +178,7 @@ def ncbi_fetch():
         else:
             with Entrez.esearch(
                 db="gene",
-                term=f'{user_input}[Gene Name] AND "Homo sapiens"[Organism]',
+                term=f'{user_input}[Gene Name] AND "{organism}"[Organism]',
                 retmax=3
             ) as handle:
                 gene_results = Entrez.read(handle)
@@ -186,13 +187,13 @@ def ncbi_fetch():
 
             if not gene_ids:
                 raise ValueError(
-                    f"No human gene found for '{user_input}'. "
+                    f"No {organism} gene found for '{user_input}'. "
                     "Check the gene symbol or Gene ID."
                 )
 
             if len(gene_ids) > 1:
                 raise ValueError(
-                    f"Multiple human genes matched '{user_input}'. "
+                    f"Multiple {organism} genes matched '{user_input}'. "
                     "Please enter the specific NCBI Gene ID."
                 )
 
@@ -202,7 +203,7 @@ def ncbi_fetch():
         if gene_id is not None:
             search_term = (
                 f"{gene_id}[GeneID] AND biomol_mrna[PROP] "
-                f"AND srcdb_refseq[PROP] AND Homo sapiens[Organism]"
+                f'AND srcdb_refseq[PROP] AND "{organism}"[Organism]'
             )
 
             with Entrez.esearch(
@@ -216,7 +217,7 @@ def ncbi_fetch():
 
             if not nucleotide_ids:
                 raise ValueError(
-                    f"No human RefSeq mRNA nucleotide records found "
+                    f"No {organism} RefSeq mRNA nucleotide records found "
                     f"for Gene ID {gene_id}."
                 )
 
@@ -269,6 +270,51 @@ def ncbi_fetch():
             "error": "NCBI retrieval failed: " + str(error)
         }), 400
 
+
+@app.get("/api/organisms")
+def organism_suggest():
+    """Type-ahead suggestions for the NCBI organism box (NCBI fetch only)."""
+    try:
+        query = request.args.get("q", "").strip()
+        email = request.args.get("email", "").strip()
+
+        words = re.findall(r"[A-Za-z0-9\-\.]+", query)
+        if len(query) < 3 or not words:
+            return jsonify({"organisms": []})
+
+        if email and "@" in email:
+            Entrez.email = email
+        Entrez.tool = "NEOHELIX_MSA_Visualizer"
+
+        term = " AND ".join(f"{word}*[All Names]" for word in words)
+        term += " AND species[Rank]"
+
+        with Entrez.esearch(db="taxonomy", term=term, retmax=20) as handle:
+            ids = Entrez.read(handle)["IdList"]
+
+        if not ids:
+            return jsonify({"organisms": []})
+
+        with Entrez.esummary(db="taxonomy", id=",".join(ids)) as handle:
+            summaries = Entrez.read(handle)
+
+        organisms = []
+        for item in summaries:
+            name = str(item.get("ScientificName", "")).strip()
+            if name:
+                organisms.append({
+                    "name": name,
+                    "common": str(item.get("CommonName", "")).strip(),
+                })
+
+        # Names starting with what the user typed come first
+        lowered = query.lower()
+        organisms.sort(key=lambda o: (not o["name"].lower().startswith(lowered), o["name"]))
+        return jsonify({"organisms": organisms[:8]})
+
+    except Exception:
+        # Suggestions are optional; never break the page if NCBI is slow.
+        return jsonify({"organisms": []})
 
 
 if __name__ == "__main__":
