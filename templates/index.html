@@ -12,7 +12,30 @@
     <div class="status"><i></i> ALIGNMENT ENGINE READY</div>
   </header>
   <main>
-    <section class="intro"><div><div class="eyebrow">SEQUENCE ANALYSIS PLATFORM</div><h2>Explore sequence relationships.</h2><p>Align two sequences with NW/SW, or compare several sequences using a simple progressive star MSA.</p></div><div class="helix">⌁</div></section>
+    <section class="intro"><div><div class="eyebrow">SEQUENCE ANALYSIS PLATFORM</div><h2>Explore sequence relationships.</h2><p>Align two sequences with NW/SW, or compare several sequences using a simple progressive star MSA.</p></div>
+<div class="helix" aria-label="Rotating DNA double helix">
+  <div class="dna-helix">
+    <span class="dna-rung" style="--i:0"></span>
+    <span class="dna-rung" style="--i:1"></span>
+    <span class="dna-rung" style="--i:2"></span>
+    <span class="dna-rung" style="--i:3"></span>
+    <span class="dna-rung" style="--i:4"></span>
+    <span class="dna-rung" style="--i:5"></span>
+    <span class="dna-rung" style="--i:6"></span>
+    <span class="dna-rung" style="--i:7"></span>
+    <span class="dna-rung" style="--i:8"></span>
+    <span class="dna-rung" style="--i:9"></span>
+    <span class="dna-rung" style="--i:10"></span>
+    <span class="dna-rung" style="--i:11"></span>
+    <span class="dna-rung" style="--i:12"></span>
+    <span class="dna-rung" style="--i:13"></span>
+    <span class="dna-rung" style="--i:14"></span>
+    <span class="dna-rung" style="--i:15"></span>
+    <span class="dna-rung" style="--i:16"></span>
+    <span class="dna-rung" style="--i:17"></span>
+  </div>
+</div>
+</section>
 
     <section class="panel">
       <div class="section-title"><span class="number">01</span><div><h2>Pairwise alignment</h2><p>Needleman–Wunsch global or Smith–Waterman local alignment</p></div></div>
@@ -50,15 +73,16 @@ ATCGATC</textarea></label>
     </section>
 
     <section class="panel">
-      <div class="section-title"><span class="number">03</span><div><h2>Fetch from NCBI</h2><p>Retrieve one reference nucleotide sequence from NCBI Nucleotide (nuccore). Example: NM_000546.6 (human TP53 mRNA).</p></div></div>
+      <div class="section-title"><span class="number">03</span><div><h2>Fetch from NCBI</h2><p>Retrieve one reference nucleotide sequence from NCBI by Gene ID, gene symbol or nucleotide accession. Example: TP53, 7157 or NM_000546.6 (human TP53 mRNA).</p></div></div>
       <div class="controls ncbi">
-        <label>NCBI nucleotide accession<input id="accession" placeholder="e.g. NM_000546.6"></label>
+        <label>NCBI Gene ID / Gene symbol / Accession<input id="accession" placeholder="e.g. TP53, 7157 or NM_000546.6"></label>
+        <label>Organism (optional)<input id="organism" list="organismList" autocomplete="off" placeholder="Homo sapiens"><datalist id="organismList"></datalist></label>
         <label>Contact email<input id="email" type="email" placeholder="you@example.com"></label>
         <button id="ncbiButton">Fetch sequence</button>
       </div>
       <div id="ncbiResult" class="result hidden"></div>
     </section>
-    <footer>NEOHELIX • Educational implementation • DNA/RNA input (U is converted to T) • Maximum 8 sequences • NCBI fetch supports nucleotide-record accessions, not SRR run downloads</footer>
+    <footer>NEOHELIX • Educational implementation • DNA/RNA input (U is converted to T) • Maximum 8 sequences • NCBI fetch supports Gene ID, gene symbol and nucleotide accessions, not SRR run downloads</footer>
   </main>
   <script src="{{ url_for('static', filename='msa_grid.js') }}"></script>
   <script src="{{ url_for('static', filename='msa_tree.js') }}"></script>
