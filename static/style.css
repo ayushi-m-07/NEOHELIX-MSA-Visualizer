@@ -94,11 +94,90 @@ header p,
     max-width: 660px;
 }
 
+
+/* DNA DOUBLE HELIX */
+
 .helix {
-    font-size: 110px;
-    color: #286778;
-    line-height: 1;
+    width: 170px;
+    height: 190px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    perspective: 700px;
+    flex-shrink: 0;
 }
+
+.dna-helix {
+    position: relative;
+    width: 120px;
+    height: 170px;
+    transform-style: preserve-3d;
+    animation: dnaRotate 12s linear infinite;
+}
+
+.dna-rung {
+    position: absolute;
+    left: 50%;
+    top: calc(var(--i) * 5.55%);
+    width: 100px;
+    height: 3px;
+    border-radius: 5px;
+    background: linear-gradient(
+        90deg,
+        #4ce4ed,
+        #91f2c0
+    );
+    transform:
+        translate(-50%, -50%)
+        rotateY(calc(var(--i) * 30deg));
+    transform-style: preserve-3d;
+    box-shadow: 0 0 8px #4ce4ed66;
+}
+
+/* Base pair endpoints */
+
+.dna-rung::before,
+.dna-rung::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    transform: translateY(-50%);
+}
+
+.dna-rung::before {
+    left: -4px;
+    background: var(--cyan);
+    box-shadow: 0 0 10px var(--cyan);
+}
+
+.dna-rung::after {
+    right: -4px;
+    background: var(--green);
+    box-shadow: 0 0 10px var(--green);
+}
+
+/* Continuous rotation */
+
+@keyframes dnaRotate {
+    from {
+        transform: rotateY(0deg);
+    }
+    to {
+        transform: rotateY(360deg);
+    }
+}
+
+/* Accessibility */
+
+@media (prefers-reduced-motion: reduce) {
+    .dna-helix {
+        animation: none;
+    }
+}
+
 
 .panel {
     background: linear-gradient(145deg, #10212c, #0b1720);
@@ -347,8 +426,14 @@ footer {
     }
 
     .helix {
-        display: none;
-    }
+    display: flex;
+    width: 100px;
+    height: 130px;
+}
+
+    .dna-helix {
+    transform: scale(0.7);
+}
 
     .panel {
         padding: 16px;
