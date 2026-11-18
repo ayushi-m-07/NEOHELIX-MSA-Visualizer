@@ -154,8 +154,27 @@ byId("ncbiButton").addEventListener("click", async () => {
     if (!response.ok) throw new Error(data.error);
     target.classList.remove("hidden");
     target.innerHTML = `<h3>${escapeHtml(data.description)}</h3><div class="stats"><div class="stat"><b>${data.length}</b>Base pairs</div><div class="stat"><b>${escapeHtml(data.accession)}</b>Accession</div></div><div class="mono">${escapeHtml(data.sequence)}</div><button class="download" id="addFetched">Add fetched sequence to MSA input</button>`;
-    byId("addFetched").addEventListener("click", () => { const box = byId("msaInput"); box.value += `\n>${data.accession}\n${data.sequence}`; });
-  } catch (error) { showError(target, error.message); }
+   byId("addFetched").addEventListener("click", (event) => {
+  const box = byId("msaInput");
+  box.value += `\n>${data.accession}\n${data.sequence}`;
+
+  const addButton = event.currentTarget;
+  addButton.textContent = "Added to MSA input ✓";
+  addButton.disabled = true;
+
+  // Show a styled notice (uses the .notice CSS)
+  if (!byId("addedNotice")) {
+    const notice = document.createElement("p");
+    notice.id = "addedNotice";
+    notice.className = "notice";
+    notice.textContent = `${data.accession} was added to the MSA input in section 02.`;
+    addButton.insertAdjacentElement("afterend", notice);
+  }
+
+  // Bring the MSA box into view
+  box.scrollIntoView({ behavior: "smooth", block: "center" });
+});
+ } catch (error) { showError(target, error.message); }
   finally { button.disabled = false; }
 });
 
